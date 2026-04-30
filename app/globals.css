@@ -1,0 +1,226 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #F7F3EC;
+  --foreground: #1F2937;
+  --accent: #5B9B8E;
+  --accent-soft: #EAF1EE;
+  --muted: #6B7280;
+  --border: #E5E0D6;
+  --surface: #FFFFFF;
+  --danger: #B85450;
+}
+
+.dark {
+  --background: #1A1F1D;
+  --foreground: #F0EDE5;
+  --accent: #7AB8A8;
+  --accent-soft: #243029;
+  --muted: #9CA3AF;
+  --border: #2D3530;
+  --surface: #202623;
+  --danger: #D97570;
+}
+
+html,
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-feature-settings: "ss01", "cv01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-size: 16px;
+  line-height: 1.7;
+  font-weight: 400;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--foreground);
+}
+
+/* Scroll-snap container for homepage */
+.snap-container {
+  scroll-snap-type: y mandatory;
+  overflow-y: scroll;
+  height: 100vh;
+  scroll-behavior: smooth;
+}
+
+.snap-slide {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Hide scrollbar (we have a slide indicator instead) */
+.snap-container::-webkit-scrollbar {
+  width: 0;
+  background: transparent;
+}
+.snap-container {
+  scrollbar-width: none;
+}
+
+/* Subtle chevron hint animation */
+@keyframes chevron-hint {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(6px);
+    opacity: 1;
+  }
+}
+
+.chevron-hint {
+  animation: chevron-hint 2.4s ease-in-out infinite;
+}
+
+/* Fade-in stagger.
+   Inside a slide, children with .fade-up start invisible;
+   once the slide is marked [data-visible="true"], they animate in. */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide[data-visible="false"] .fade-up {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.slide[data-visible="true"] .fade-up {
+  animation: fade-up 600ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
+}
+
+.fade-up-delay-1 { animation-delay: 80ms; }
+.fade-up-delay-2 { animation-delay: 160ms; }
+.fade-up-delay-3 { animation-delay: 240ms; }
+.fade-up-delay-4 { animation-delay: 320ms; }
+.fade-up-delay-5 { animation-delay: 400ms; }
+.fade-up-delay-6 { animation-delay: 480ms; }
+
+/* Buttons */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 24px;
+  border-radius: 9999px;
+  background: var(--accent);
+  color: #FFFFFF;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  transition: opacity 200ms ease-out, transform 200ms ease-out;
+  border: 1px solid var(--accent);
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  opacity: 0.92;
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 24px;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 15px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  transition: border-color 200ms ease-out, background 200ms ease-out;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 24px;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 15px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  transition: background 200ms ease-out;
+  cursor: pointer;
+}
+
+.btn-ghost:hover {
+  background: var(--accent-soft);
+}
+
+/* Form inputs */
+.input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 15px;
+  line-height: 1.5;
+  outline: none;
+  transition: border-color 200ms ease-out;
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+.input::placeholder {
+  color: var(--muted);
+}
+
+/* Card */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px;
+}
+
+/* Subtle pulse for live counters */
+@keyframes soft-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
+.live-pulse {
+  animation: soft-pulse 2s ease-in-out infinite;
+}
