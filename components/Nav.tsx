@@ -106,7 +106,12 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
             <Link href="/listener/pending" className="btn-nav text-[14px]">审核中</Link>
           )}
           {user && user.is_listener && (
-            <Link href="/listener" className="btn-nav text-[14px]">后台</Link>
+            <Link
+              href="/listener"
+              className="btn-primary text-[14px] py-1.5 px-3"
+            >
+              倾听者后台
+            </Link>
           )}
           {user && (
             <div className="relative">
@@ -186,7 +191,13 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
               <Link href="/listener/pending" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">申请审核中</Link>
             )}
             {user && user.is_listener && (
-              <Link href="/listener" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">倾听者后台</Link>
+              <Link
+                href="/listener"
+                onClick={() => setMenuOpen(false)}
+                className="py-2 text-[15px] text-accent font-medium"
+              >
+                倾听者后台
+              </Link>
             )}
             {user && (
               <button
