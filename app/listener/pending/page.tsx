@@ -64,8 +64,7 @@ export default function ListenerPendingPage() {
   async function logout() {
     const supabase = createBrowserClient();
     await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+    window.location.assign("/");
   }
 
   return (

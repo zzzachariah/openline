@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Eye, EyeOff, Check, Copy } from "lucide-react";
 import Logo from "@/components/Logo";
 import Nav from "@/components/Nav";
@@ -11,7 +11,6 @@ import { createBrowserClient } from "@/lib/supabase/client";
 import { usernameToEmail } from "@/lib/username";
 
 function SignupContent() {
-  const router = useRouter();
   const params = useSearchParams();
   const redirect = params.get("redirect") || "/me";
 
@@ -173,7 +172,7 @@ function SignupContent() {
                 换设备登录时需要它。
               </p>
               <button
-                onClick={() => router.push(redirect)}
+                onClick={() => window.location.assign(redirect)}
                 className="btn-primary w-full"
               >
                 继续 →

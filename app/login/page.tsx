@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import Logo from "@/components/Logo";
 import Nav from "@/components/Nav";
@@ -11,7 +11,6 @@ import { createBrowserClient } from "@/lib/supabase/client";
 import { usernameToEmail } from "@/lib/username";
 
 function LoginContent() {
-  const router = useRouter();
   const params = useSearchParams();
   const redirect = params.get("redirect");
 
@@ -30,38 +29,45 @@ function LoginContent() {
       return;
     }
     setLoading(true);
-    const supabase = createBrowserClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: usernameToEmail(u),
-      password,
-    });
-    if (signInError) {
-      setError("用户名或密码不正确");
-      setLoading(false);
-      return;
-    }
-    // Determine where to send the user
-    const { data: auth } = await supabase.auth.getUser();
-    if (auth.user) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("is_listener, listener_application_at")
-        .eq("id", auth.user.id)
-        .single();
-      let target: string;
+    try {
+      const supabase = createBrowserClient();
+      const { data: signInData, error: signInError } =
+        await supabase.auth.signInWithPassword({
+          email: usernameToEmail(u),
+          password,
+        });
+      if (signInError || !signInData.user) {
+        setError("用户名或密码不正确");
+        setLoading(false);
+        return;
+      }
+
+      // Determine where to send the user. Use the user we just signed in with
+      // directly (avoid an extra getUser() roundtrip that can hang) and use
+      // maybeSingle() so a missing profile row never blocks navigation.
+      let target = "/me";
       if (redirect) {
         target = redirect;
-      } else if (profile?.is_listener) {
-        target = "/listener";
-      } else if (profile?.listener_application_at) {
-        target = "/listener/pending";
       } else {
-        target = "/me";
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("is_listener, listener_application_at")
+          .eq("id", signInData.user.id)
+          .maybeSingle();
+        if (profile?.is_listener) {
+          target = "/listener";
+        } else if (profile?.listener_application_at) {
+          target = "/listener/pending";
+        }
       }
-      router.push(target);
-      router.refresh();
-    } else {
-      router.push("/me");
+
+      // Hard navigation guarantees the destination server component re-renders
+      // with the auth cookies that signInWithPassword just set. router.push
+      // can race with cookie propagation and leave the page in a stale state.
+      window.location.assign(target);
+    } catch {
+      setError("登录失败，请稍后再试");
+      setLoading(false);
     }
   }
 

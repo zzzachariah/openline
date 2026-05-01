@@ -2,7 +2,6 @@
 
 import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Check, Copy } from "lucide-react";
 import Logo from "@/components/Logo";
 import Nav from "@/components/Nav";
@@ -11,8 +10,6 @@ import { createBrowserClient } from "@/lib/supabase/client";
 import { usernameToEmail } from "@/lib/username";
 
 function ListenerSignupContent() {
-  const router = useRouter();
-
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [show, setShow] = useState(false);
@@ -178,7 +175,7 @@ function ListenerSignupContent() {
                 </button>
               </div>
               <button
-                onClick={() => router.push("/listener/pending")}
+                onClick={() => window.location.assign("/listener/pending")}
                 className="btn-primary w-full"
               >
                 查看审核状态 →

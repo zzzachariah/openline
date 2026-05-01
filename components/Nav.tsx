@@ -5,7 +5,6 @@ import Link from "next/link";
 import Logo from "./Logo";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 
 type NavUser = {
   username: string;
@@ -22,7 +21,6 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
   const [user, setUser] = useState<NavUser>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const router = useRouter();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 80);
@@ -72,8 +70,9 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
   async function logout() {
     const supabase = createBrowserClient();
     await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+    // Hard navigation forces a fresh server render so every layout drops the
+    // stale authenticated state and any in-flight RSC requests are cancelled.
+    window.location.assign("/");
   }
 
   return (
