@@ -31,38 +31,34 @@ function LoginContent() {
     }
     setLoading(true);
     const supabase = createBrowserClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: usernameToEmail(u),
-      password,
-    });
-    if (signInError) {
+    const { data: signInData, error: signInError } =
+      await supabase.auth.signInWithPassword({
+        email: usernameToEmail(u),
+        password,
+      });
+    if (signInError || !signInData.user) {
       setError("用户名或密码不正确");
       setLoading(false);
       return;
     }
-    // Determine where to send the user
-    const { data: auth } = await supabase.auth.getUser();
-    if (auth.user) {
+    // Determine where to send the user. signInWithPassword already returns the
+    // user, so skip a redundant getUser() round trip.
+    let target = redirect ?? "/me";
+    if (!redirect) {
       const { data: profile } = await supabase
         .from("profiles")
         .select("is_listener, listener_application_at")
-        .eq("id", auth.user.id)
-        .single();
-      let target: string;
-      if (redirect) {
-        target = redirect;
-      } else if (profile?.is_listener) {
+        .eq("id", signInData.user.id)
+        .maybeSingle();
+      if (profile?.is_listener) {
         target = "/listener";
       } else if (profile?.listener_application_at) {
         target = "/listener/pending";
-      } else {
-        target = "/me";
       }
-      router.push(target);
-      router.refresh();
-    } else {
-      router.push("/me");
     }
+    router.replace(target);
+    router.refresh();
+    setLoading(false);
   }
 
   return (
