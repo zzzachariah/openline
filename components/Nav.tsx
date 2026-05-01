@@ -78,8 +78,8 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
 
   return (
     <nav
-      className={`fixed top-0 left-0 right-0 z-40 transition-colors duration-300 ${
-        showSolid ? "bg-background border-b border-border" : "bg-transparent"
+      className={`fixed top-0 left-0 right-0 z-40 transition-colors duration-300 border-b border-border ${
+        showSolid ? "bg-background" : "bg-transparent"
       }`}
     >
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
