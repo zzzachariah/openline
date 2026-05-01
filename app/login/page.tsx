@@ -88,8 +88,6 @@ function LoginContent() {
         target = "/listener";
       } else if (profile?.listener_application_at) {
         target = "/listener/pending";
-      } else {
-        target = "/me";
       }
       router.push(target);
       router.refresh();
@@ -104,6 +102,9 @@ function LoginContent() {
     } finally {
       setLoading(false);
     }
+    router.replace(target);
+    router.refresh();
+    setLoading(false);
   }
 
   return (
