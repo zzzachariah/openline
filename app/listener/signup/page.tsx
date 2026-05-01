@@ -2,7 +2,6 @@
 
 import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Check, Copy } from "lucide-react";
 import Logo from "@/components/Logo";
 import Nav from "@/components/Nav";
@@ -14,8 +13,6 @@ import { TimeoutError, withTimeout } from "@/lib/with-timeout";
 const SIGNUP_TIMEOUT_MS = 15_000;
 
 function ListenerSignupContent() {
-  const router = useRouter();
-
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [show, setShow] = useState(false);
@@ -198,7 +195,7 @@ function ListenerSignupContent() {
                 </button>
               </div>
               <button
-                onClick={() => router.push("/listener/pending")}
+                onClick={() => window.location.assign("/listener/pending")}
                 className="btn-primary w-full"
               >
                 查看审核状态 →

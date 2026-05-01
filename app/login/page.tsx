@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import Logo from "@/components/Logo";
 import Nav from "@/components/Nav";
@@ -14,7 +14,6 @@ import { TimeoutError, withTimeout } from "@/lib/with-timeout";
 const LOGIN_TIMEOUT_MS = 10_000;
 
 function LoginContent() {
-  const router = useRouter();
   const params = useSearchParams();
   const redirect = params.get("redirect");
 
@@ -33,78 +32,45 @@ function LoginContent() {
       return;
     }
     setLoading(true);
-    let target: string | null = null;
     try {
       const supabase = createBrowserClient();
-      const { error: signInError } = await withTimeout(
-        supabase.auth.signInWithPassword({
+      const { data: signInData, error: signInError } =
+        await supabase.auth.signInWithPassword({
           email: usernameToEmail(u),
           password,
-        }),
-        LOGIN_TIMEOUT_MS,
-        "登录超时（10 秒未响应），请检查网络后重试"
-      );
-      if (signInError) {
-        const msg = signInError.message?.toLowerCase() ?? "";
-        if (msg.includes("invalid login")) {
-          setError("用户名或密码不正确");
-        } else if (msg.includes("rate limit")) {
-          setError("尝试次数过多，请稍后再试");
-        } else if (msg.includes("network") || msg.includes("fetch")) {
-          setError("网络连接失败，请检查网络后重试");
-        } else {
-          setError(`登录失败：${signInError.message}`);
-        }
+        });
+      if (signInError || !signInData.user) {
+        setError("用户名或密码不正确");
+        setLoading(false);
         return;
       }
 
-      const { data: auth, error: userError } = await withTimeout(
-        supabase.auth.getUser(),
-        LOGIN_TIMEOUT_MS,
-        "登录后获取用户信息超时，请重试"
-      );
-      if (userError || !auth.user) {
-        setError("登录后无法获取用户信息，请重试");
-        return;
-      }
-
-      const { data: profile, error: profileError } = await withTimeout(
-        supabase
-          .from("profiles")
-          .select("is_listener, listener_application_at")
-          .eq("id", auth.user.id)
-          .single(),
-        LOGIN_TIMEOUT_MS,
-        "读取用户信息超时，请重试"
-      );
-      if (profileError) {
-        setError(`无法读取账号信息：${profileError.message}`);
-        return;
-      }
-
+      // Determine where to send the user. Use the user we just signed in with
+      // directly (avoid an extra getUser() roundtrip that can hang) and use
+      // maybeSingle() so a missing profile row never blocks navigation.
+      let target = "/me";
       if (redirect) {
         target = redirect;
-      } else if (profile?.is_listener) {
-        target = "/listener";
-      } else if (profile?.listener_application_at) {
-        target = "/listener/pending";
       } else {
-        target = "/me";
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("is_listener, listener_application_at")
+          .eq("id", signInData.user.id)
+          .maybeSingle();
+        if (profile?.is_listener) {
+          target = "/listener";
+        } else if (profile?.listener_application_at) {
+          target = "/listener/pending";
+        }
       }
-    } catch (err) {
-      if (err instanceof TimeoutError) {
-        setError(err.message);
-      } else if (err instanceof Error) {
-        setError(`登录失败：${err.message}`);
-      } else {
-        setError("登录失败，请稍后再试");
-      }
-    } finally {
+
+      // Hard navigation guarantees the destination server component re-renders
+      // with the auth cookies that signInWithPassword just set. router.push
+      // can race with cookie propagation and leave the page in a stale state.
+      window.location.assign(target);
+    } catch {
+      setError("登录失败，请稍后再试");
       setLoading(false);
-    }
-    if (target) {
-      router.replace(target);
-      router.refresh();
     }
   }
 

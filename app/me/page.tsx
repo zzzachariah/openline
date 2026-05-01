@@ -110,8 +110,7 @@ export default function MePage() {
   async function logout() {
     const supabase = createBrowserClient();
     await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+    window.location.assign("/");
   }
 
   async function cancelBooking(id: string) {
