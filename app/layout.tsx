@@ -19,6 +19,10 @@ const notoSC = Noto_Sans_SC({
 export const metadata: Metadata = {
   title: "OpenLine · 倾诉",
   description: "免费、匿名的倾诉平台。我们不是医生，但我们愿意认真听你说话。",
+  icons: {
+    icon: "/apple-touch-icon.png",
+    shortcut: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({
