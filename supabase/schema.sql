@@ -6,11 +6,16 @@
 -- =====================================================================
 
 create table if not exists public.profiles (
-  id            uuid primary key references auth.users(id) on delete cascade,
-  username      text unique not null,
-  is_listener   boolean not null default false,
-  created_at    timestamptz not null default now()
+  id                       uuid primary key references auth.users(id) on delete cascade,
+  username                 text unique not null,
+  is_listener              boolean not null default false,
+  listener_application_at  timestamptz,
+  created_at               timestamptz not null default now()
 );
+
+create index if not exists profiles_pending_listener_idx
+  on public.profiles(listener_application_at)
+  where listener_application_at is not null and is_listener = false;
 
 create table if not exists public.time_slots (
   id            uuid primary key default gen_random_uuid(),
@@ -231,6 +236,18 @@ create policy "stats: public read"
 -- =====================================================================
 
 alter publication supabase_realtime add table public.messages;
+
+-- =====================================================================
+-- Migrations (for projects already running an older schema)
+-- =====================================================================
+-- Idempotent. Safe to run on a fresh database too.
+
+alter table public.profiles
+  add column if not exists listener_application_at timestamptz;
+
+create index if not exists profiles_pending_listener_idx
+  on public.profiles(listener_application_at)
+  where listener_application_at is not null and is_listener = false;
 
 -- =====================================================================
 -- Optional: 7-day message auto-deletion (requires pg_cron extension)

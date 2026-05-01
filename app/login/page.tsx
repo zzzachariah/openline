@@ -45,10 +45,19 @@ function LoginContent() {
     if (auth.user) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("is_listener")
+        .select("is_listener, listener_application_at")
         .eq("id", auth.user.id)
         .single();
-      const target = redirect ? redirect : profile?.is_listener ? "/listener" : "/me";
+      let target: string;
+      if (redirect) {
+        target = redirect;
+      } else if (profile?.is_listener) {
+        target = "/listener";
+      } else if (profile?.listener_application_at) {
+        target = "/listener/pending";
+      } else {
+        target = "/me";
+      }
       router.push(target);
       router.refresh();
     } else {
@@ -113,6 +122,14 @@ function LoginContent() {
                 注册
               </Link>
             </p>
+            <div className="mt-3 pt-3 border-t border-border">
+              <p className="text-caption text-muted text-center">
+                想成为倾听者？{" "}
+                <Link href="/listener/signup" className="text-accent">
+                  申请加入
+                </Link>
+              </p>
+            </div>
           </div>
         </div>
       </main>

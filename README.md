@@ -59,33 +59,81 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Creating a listener account
+## Listener accounts
 
-For v1, listener accounts are provisioned manually:
+Listeners apply for an account from the website; you (the admin) approve them in Supabase.
 
-1. Go to **Authentication → Users → Add user → Create new user** in the Supabase dashboard.
-2. Use any email (e.g. `listener1@openline.local`) and a strong password. The email is just an internal handle; it is never shown.
-3. After the user is created, copy the user's UUID.
-4. Open **SQL Editor** and run:
+### Self-service flow
+
+1. The applicant goes to `/login` and clicks **想成为倾听者？申请加入** (or directly visits `/listener/signup`).
+2. They set a password. The site generates a `匿名倾听者XXXXXX` username, creates the auth user, and writes a `listener_application_at` timestamp on the profile. `is_listener` stays `false` until you approve.
+3. After signing up they're routed to `/listener/pending`, which shows their username and a "审核中" message.
+
+### Approving applications
+
+In the Supabase **SQL Editor**:
+
+```sql
+-- See pending applications (newest first)
+select id, username, listener_application_at
+  from public.profiles
+ where listener_application_at is not null
+   and is_listener = false
+ order by listener_application_at desc;
+
+-- Approve a listener
+update public.profiles
+   set is_listener = true
+ where username = '匿名倾听者XXXXXX';
+
+-- Reject (clears the application timestamp; the account becomes a regular user)
+update public.profiles
+   set listener_application_at = null
+ where username = '匿名倾听者XXXXXX';
+```
+
+The next time the listener logs in, they'll be routed to `/listener` and can add time slots.
+
+### (Fallback) Creating a listener manually
+
+If you want to seed a listener directly without going through the self-service form:
+
+1. **Authentication → Users → Add user → Create new user** in the Supabase dashboard.
+2. Use email `l_<6-char-suffix>@openline.local` (e.g. `l_a3k9p2@openline.local`) and a password. The email derivation must match what the login page computes from the username — see `lib/username.ts`.
+3. Copy the new user's UUID and run:
 
    ```sql
    insert into public.profiles (id, username, is_listener)
    values (
      '<user-uuid>',
-     '匿名倾听者TESTER',  -- pick a unique username; you may use the helper format
+     '匿名倾听者A3K9P2',  -- must use the same suffix as the email
      true
    );
    ```
 
-   Pick any username that starts with `匿名倾听者` and ends in 6 characters (uppercase letters and digits, avoiding `I`, `O`, `0`, `1`).
+   Pick a username that starts with `匿名倾听者` followed by 6 uppercase letters/digits (no `I`, `O`, `0`, `1`). The lowercase suffix must match the email's `l_<suffix>` part.
 
-5. The listener can now log in at `/login` with **the username** (not the email) and the password you set.
-6. Once logged in, the listener will be redirected to `/listener` and can add available time slots.
+4. The listener logs in at `/login` with the **username** (not the email).
 
-To convert an existing user into a listener, run:
+### Promoting an existing user to listener
 
 ```sql
 update public.profiles set is_listener = true where username = '匿名用户XXXXXX';
+```
+
+Note: the email format is different between users (`<suffix>@openline.local`) and listeners (`l_<suffix>@openline.local`). Promoting an existing user keeps their original email, and login will continue to work because the username still starts with `匿名用户`. If you want the account renamed to a listener-style username, you must also update `auth.users.email` to match.
+
+### Migrating listeners created with the older email scheme
+
+If you set up a listener before the email convention split (when both roles mapped to `<suffix>@openline.local`), realign their `auth.users.email` to the new `l_<suffix>` format so the login form can find them:
+
+```sql
+update auth.users
+   set email = 'l_' || lower(substring(p.username from char_length('匿名倾听者') + 1)) || '@openline.local'
+  from public.profiles p
+ where auth.users.id = p.id
+   and p.is_listener = true
+   and p.username like '匿名倾听者%';
 ```
 
 ## Deployment to Vercel
@@ -127,14 +175,16 @@ The homepage counter is backed by a row in the `stats` table (`id = 'total_booki
 ```
 app/
   page.tsx                          — Homepage (10 vertical scroll-snap slides)
-  signup/page.tsx                   — Sign up
-  login/page.tsx                    — Login
+  signup/page.tsx                   — User sign up
+  login/page.tsx                    — Login (regular users + listeners)
   book/page.tsx                     — Browse and book a slot
   me/page.tsx                       — User dashboard
-  listener/page.tsx                 — Listener dashboard
+  listener/page.tsx                 — Listener dashboard (approved listeners)
+  listener/signup/page.tsx          — Listener self-service application
+  listener/pending/page.tsx         — "审核中" landing page for pending listeners
   chat/[bookingId]/page.tsx         — User-side chat room
   listener/chat/[bookingId]/page.tsx — Listener-side chat room
-  api/signup/route.ts               — Server route that creates user + profile
+  api/signup/route.ts               — Server route that creates user + profile (role=user|listener)
   layout.tsx, globals.css           — Root layout, fonts, theme
 components/
   Logo.tsx, Button.tsx, Slide.tsx, Counter.tsx, SlideIndicator.tsx,

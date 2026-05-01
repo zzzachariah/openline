@@ -50,11 +50,15 @@ export default function ListenerPage() {
     }
     const { data: profile } = await supabase
       .from("profiles")
-      .select("username, is_listener")
+      .select("username, is_listener, listener_application_at")
       .eq("id", auth.user.id)
       .single();
     if (!profile?.is_listener) {
-      router.push("/me");
+      if (profile?.listener_application_at) {
+        router.push("/listener/pending");
+      } else {
+        router.push("/me");
+      }
       return;
     }
     setUsername(profile.username);

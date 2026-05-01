@@ -18,8 +18,13 @@ export function generateListenerUsername(): string {
 }
 
 export function usernameToEmail(username: string): string {
-  // Strip the prefix (匿名用户 or 匿名倾听者) and lowercase the suffix.
   // The email is just an internal handle for Supabase Auth — never shown.
-  const suffix = username.replace(/^匿名用户/, "").replace(/^匿名倾听者/, "").toLowerCase();
+  // Listeners get an `l_` prefix so a regular user and a listener can share the
+  // same random suffix without colliding on the unique-email constraint.
+  if (username.startsWith("匿名倾听者")) {
+    const suffix = username.slice("匿名倾听者".length).toLowerCase();
+    return `l_${suffix}@openline.local`;
+  }
+  const suffix = username.replace(/^匿名用户/, "").toLowerCase();
   return `${suffix}@openline.local`;
 }
