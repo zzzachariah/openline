@@ -33,6 +33,7 @@ function LoginContent() {
       return;
     }
     setLoading(true);
+    let target: string | null = null;
     try {
       const supabase = createBrowserClient();
       const { error: signInError } = await withTimeout(
@@ -81,16 +82,15 @@ function LoginContent() {
         return;
       }
 
-      let target: string;
       if (redirect) {
         target = redirect;
       } else if (profile?.is_listener) {
         target = "/listener";
       } else if (profile?.listener_application_at) {
         target = "/listener/pending";
+      } else {
+        target = "/me";
       }
-      router.push(target);
-      router.refresh();
     } catch (err) {
       if (err instanceof TimeoutError) {
         setError(err.message);
@@ -102,9 +102,10 @@ function LoginContent() {
     } finally {
       setLoading(false);
     }
-    router.replace(target);
-    router.refresh();
-    setLoading(false);
+    if (target) {
+      router.replace(target);
+      router.refresh();
+    }
   }
 
   return (

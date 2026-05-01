@@ -9,6 +9,9 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { usernameToEmail } from "@/lib/username";
+import { TimeoutError, withTimeout } from "@/lib/with-timeout";
+
+const SIGNUP_TIMEOUT_MS = 15_000;
 
 function ListenerSignupContent() {
   const router = useRouter();
@@ -36,36 +39,53 @@ function ListenerSignupContent() {
 
     setLoading(true);
     try {
-      const res = await fetch("/api/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password, role: "listener" }),
-      });
-      const data = await res.json();
+      const res = await withTimeout(
+        fetch("/api/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password, role: "listener" }),
+        }),
+        SIGNUP_TIMEOUT_MS,
+        "注册超时（15 秒未响应），请检查网络后重试"
+      );
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error || "注册失败，请稍后再试");
-        setLoading(false);
+        setError(data?.error || `注册失败（${res.status}），请稍后再试`);
         return;
       }
 
-      const username = data.username as string;
+      const username = data?.username as string | undefined;
+      if (!username) {
+        setError("注册返回数据异常，请稍后再试");
+        return;
+      }
+
       // Sign in immediately so the listener lands on the pending page.
       const supabase = createBrowserClient();
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: usernameToEmail(username),
-        password,
-      });
+      const { error: signInError } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email: usernameToEmail(username),
+          password,
+        }),
+        SIGNUP_TIMEOUT_MS,
+        "注册成功但登录超时，请前往登录页用此用户名登录"
+      );
       if (signInError) {
         // Account exists but sign-in failed; still show the username so they
         // can log in manually after.
         setCreated(username);
-        setLoading(false);
         return;
       }
       setCreated(username);
-      setLoading(false);
-    } catch {
-      setError("网络错误，请稍后再试");
+    } catch (err) {
+      if (err instanceof TimeoutError) {
+        setError(err.message);
+      } else if (err instanceof Error) {
+        setError(`注册失败：${err.message}`);
+      } else {
+        setError("网络错误，请稍后再试");
+      }
+    } finally {
       setLoading(false);
     }
   }
