@@ -9,6 +9,9 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { usernameToEmail } from "@/lib/username";
+import { TimeoutError, withTimeout } from "@/lib/with-timeout";
+
+const SIGNUP_TIMEOUT_MS = 15_000;
 
 function SignupContent() {
   const params = useSearchParams();
@@ -37,34 +40,51 @@ function SignupContent() {
 
     setLoading(true);
     try {
-      const res = await fetch("/api/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      const data = await res.json();
+      const res = await withTimeout(
+        fetch("/api/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password }),
+        }),
+        SIGNUP_TIMEOUT_MS,
+        "注册超时（15 秒未响应），请检查网络后重试"
+      );
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error || "注册失败，请稍后再试");
-        setLoading(false);
+        setError(data?.error || `注册失败（${res.status}），请稍后再试`);
         return;
       }
 
-      const username = data.username as string;
+      const username = data?.username as string | undefined;
+      if (!username) {
+        setError("注册返回数据异常，请稍后再试");
+        return;
+      }
+
       // Sign in immediately so the session is set
       const supabase = createBrowserClient();
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: usernameToEmail(username),
-        password,
-      });
+      const { error: signInError } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email: usernameToEmail(username),
+          password,
+        }),
+        SIGNUP_TIMEOUT_MS,
+        "注册完成但登录超时，请前往登录页"
+      );
       if (signInError) {
-        setError("注册成功但登录失败，请前往登录页");
-        setLoading(false);
+        setError(`注册成功但登录失败：${signInError.message}。请前往登录页`);
         return;
       }
       setCreated(username);
-      setLoading(false);
-    } catch {
-      setError("网络错误，请稍后再试");
+    } catch (err) {
+      if (err instanceof TimeoutError) {
+        setError(err.message);
+      } else if (err instanceof Error) {
+        setError(`注册失败：${err.message}`);
+      } else {
+        setError("网络错误，请稍后再试");
+      }
+    } finally {
       setLoading(false);
     }
   }

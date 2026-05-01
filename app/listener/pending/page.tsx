@@ -19,26 +19,30 @@ export default function ListenerPendingPage() {
     async function load() {
       const supabase = createBrowserClient();
       const { data: auth } = await supabase.auth.getUser();
+      if (cancelled) return;
       if (!auth.user) {
-        router.push("/login?redirect=/listener/pending");
+        router.replace("/login?redirect=/listener/pending");
         return;
       }
       const { data: profile } = await supabase
         .from("profiles")
         .select("username, is_listener, listener_application_at")
         .eq("id", auth.user.id)
-        .single();
-      if (!profile) return;
+        .maybeSingle();
       if (cancelled) return;
+      if (!profile) {
+        router.replace("/login?redirect=/listener/pending");
+        return;
+      }
 
       // Already approved — go to the listener dashboard.
       if (profile.is_listener) {
-        router.push("/listener");
+        router.replace("/listener");
         return;
       }
       // Never applied — they're a regular user.
       if (!profile.listener_application_at) {
-        router.push("/me");
+        router.replace("/me");
         return;
       }
       setUsername(profile.username);

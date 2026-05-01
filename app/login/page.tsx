@@ -9,6 +9,9 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { usernameToEmail } from "@/lib/username";
+import { TimeoutError, withTimeout } from "@/lib/with-timeout";
+
+const LOGIN_TIMEOUT_MS = 10_000;
 
 function LoginContent() {
   const params = useSearchParams();
@@ -90,7 +93,7 @@ function LoginContent() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="input"
-                placeholder="用户名（如 匿名用户A3K9P2）"
+                placeholder="用户名（如 匿名用户A3K9P2 或 匿名倾听者A3K9P2）"
                 autoFocus
                 autoComplete="username"
               />

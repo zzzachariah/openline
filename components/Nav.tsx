@@ -77,8 +77,8 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
 
   return (
     <nav
-      className={`fixed top-0 left-0 right-0 z-40 transition-colors duration-300 ${
-        showSolid ? "bg-background border-b border-border" : "bg-transparent"
+      className={`fixed top-0 left-0 right-0 z-40 transition-colors duration-300 border-b border-border ${
+        showSolid ? "bg-background" : "bg-transparent"
       }`}
     >
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
@@ -87,31 +87,36 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
           <span className="text-[15px] font-medium tracking-tight">openline</span>
         </Link>
 
-        <div className="hidden md:flex items-center gap-1">
-          <Link href="/" className="btn-ghost text-[14px]">介绍</Link>
+        <div className="hidden md:flex items-center gap-2">
+          <Link href="/" className="btn-nav text-[14px]">介绍</Link>
           {!user && (
             <>
-              <Link href="/book" className="btn-ghost text-[14px]">预约</Link>
-              <Link href="/login" className="btn-ghost text-[14px]">登录</Link>
+              <Link href="/book" className="btn-nav text-[14px]">预约</Link>
+              <Link href="/login" className="btn-nav text-[14px]">登录</Link>
             </>
           )}
           {user && !user.is_listener && !user.listener_application_at && (
             <>
-              <Link href="/book" className="btn-ghost text-[14px]">预约</Link>
-              <Link href="/me" className="btn-ghost text-[14px]">我的</Link>
+              <Link href="/book" className="btn-nav text-[14px]">预约</Link>
+              <Link href="/me" className="btn-nav text-[14px]">我的</Link>
             </>
           )}
           {user && !user.is_listener && user.listener_application_at && (
-            <Link href="/listener/pending" className="btn-ghost text-[14px]">审核中</Link>
+            <Link href="/listener/pending" className="btn-nav text-[14px]">审核中</Link>
           )}
           {user && user.is_listener && (
-            <Link href="/listener" className="btn-ghost text-[14px]">后台</Link>
+            <Link
+              href="/listener"
+              className="btn-primary text-[14px] py-1.5 px-3"
+            >
+              倾听者后台
+            </Link>
           )}
           {user && (
             <div className="relative">
               <button
                 onClick={() => setDropdownOpen((v) => !v)}
-                className="btn-ghost text-[14px] flex items-center gap-1"
+                className="btn-nav text-[14px] flex items-center gap-1"
               >
                 {user.username}
                 <ChevronDown size={14} />
@@ -185,7 +190,13 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
               <Link href="/listener/pending" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">申请审核中</Link>
             )}
             {user && user.is_listener && (
-              <Link href="/listener" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">倾听者后台</Link>
+              <Link
+                href="/listener"
+                onClick={() => setMenuOpen(false)}
+                className="py-2 text-[15px] text-accent font-medium"
+              >
+                倾听者后台
+              </Link>
             )}
             {user && (
               <button
