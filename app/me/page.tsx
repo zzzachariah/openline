@@ -38,21 +38,30 @@ export default function MePage() {
     async function load() {
       const supabase = createBrowserClient();
       const { data: auth } = await supabase.auth.getUser();
+      if (cancelled) return;
       if (!auth.user) {
-        router.push("/login?redirect=/me");
+        router.replace("/login?redirect=/me");
         return;
       }
       const { data: profile } = await supabase
         .from("profiles")
-        .select("username, is_listener")
+        .select("username, is_listener, listener_application_at")
         .eq("id", auth.user.id)
-        .single();
-      if (!profile) return;
-      if (profile.is_listener) {
-        router.push("/listener");
+        .maybeSingle();
+      if (cancelled) return;
+      if (!profile) {
+        // Profile missing — can't continue here. Send back to login.
+        router.replace("/login?redirect=/me");
         return;
       }
-      if (cancelled) return;
+      if (profile.is_listener) {
+        router.replace("/listener");
+        return;
+      }
+      if (profile.listener_application_at) {
+        router.replace("/listener/pending");
+        return;
+      }
       setUsername(profile.username);
 
       const { data: rows } = await supabase
@@ -63,7 +72,8 @@ export default function MePage() {
         .eq("user_id", auth.user.id)
         .order("created_at", { ascending: false });
 
-      if (!cancelled && rows) {
+      if (cancelled) return;
+      if (rows) {
         const mapped: BookingCardData[] = (rows as RawBooking[]).map((r) => {
           const listener = Array.isArray(r.listener) ? r.listener[0] : r.listener;
           const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;

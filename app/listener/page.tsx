@@ -45,19 +45,23 @@ export default function ListenerPage() {
     const supabase = createBrowserClient();
     const { data: auth } = await supabase.auth.getUser();
     if (!auth.user) {
-      router.push("/login?redirect=/listener");
+      router.replace("/login?redirect=/listener");
       return;
     }
     const { data: profile } = await supabase
       .from("profiles")
       .select("username, is_listener, listener_application_at")
       .eq("id", auth.user.id)
-      .single();
-    if (!profile?.is_listener) {
-      if (profile?.listener_application_at) {
-        router.push("/listener/pending");
+      .maybeSingle();
+    if (!profile) {
+      router.replace("/login?redirect=/listener");
+      return;
+    }
+    if (!profile.is_listener) {
+      if (profile.listener_application_at) {
+        router.replace("/listener/pending");
       } else {
-        router.push("/me");
+        router.replace("/me");
       }
       return;
     }
