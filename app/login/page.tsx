@@ -9,6 +9,9 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { usernameToEmail } from "@/lib/username";
+import { TimeoutError, withTimeout } from "@/lib/with-timeout";
+
+const LOGIN_TIMEOUT_MS = 10_000;
 
 function LoginContent() {
   const router = useRouter();
@@ -30,24 +33,54 @@ function LoginContent() {
       return;
     }
     setLoading(true);
-    const supabase = createBrowserClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: usernameToEmail(u),
-      password,
-    });
-    if (signInError) {
-      setError("用户名或密码不正确");
-      setLoading(false);
-      return;
-    }
-    // Determine where to send the user
-    const { data: auth } = await supabase.auth.getUser();
-    if (auth.user) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("is_listener, listener_application_at")
-        .eq("id", auth.user.id)
-        .single();
+    try {
+      const supabase = createBrowserClient();
+      const { error: signInError } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email: usernameToEmail(u),
+          password,
+        }),
+        LOGIN_TIMEOUT_MS,
+        "登录超时（10 秒未响应），请检查网络后重试"
+      );
+      if (signInError) {
+        const msg = signInError.message?.toLowerCase() ?? "";
+        if (msg.includes("invalid login")) {
+          setError("用户名或密码不正确");
+        } else if (msg.includes("rate limit")) {
+          setError("尝试次数过多，请稍后再试");
+        } else if (msg.includes("network") || msg.includes("fetch")) {
+          setError("网络连接失败，请检查网络后重试");
+        } else {
+          setError(`登录失败：${signInError.message}`);
+        }
+        return;
+      }
+
+      const { data: auth, error: userError } = await withTimeout(
+        supabase.auth.getUser(),
+        LOGIN_TIMEOUT_MS,
+        "登录后获取用户信息超时，请重试"
+      );
+      if (userError || !auth.user) {
+        setError("登录后无法获取用户信息，请重试");
+        return;
+      }
+
+      const { data: profile, error: profileError } = await withTimeout(
+        supabase
+          .from("profiles")
+          .select("is_listener, listener_application_at")
+          .eq("id", auth.user.id)
+          .single(),
+        LOGIN_TIMEOUT_MS,
+        "读取用户信息超时，请重试"
+      );
+      if (profileError) {
+        setError(`无法读取账号信息：${profileError.message}`);
+        return;
+      }
+
       let target: string;
       if (redirect) {
         target = redirect;
@@ -60,8 +93,16 @@ function LoginContent() {
       }
       router.push(target);
       router.refresh();
-    } else {
-      router.push("/me");
+    } catch (err) {
+      if (err instanceof TimeoutError) {
+        setError(err.message);
+      } else if (err instanceof Error) {
+        setError(`登录失败：${err.message}`);
+      } else {
+        setError("登录失败，请稍后再试");
+      }
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -84,7 +125,7 @@ function LoginContent() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="input"
-                placeholder="用户名（如 匿名用户A3K9P2）"
+                placeholder="用户名（如 匿名用户A3K9P2 或 匿名倾听者A3K9P2）"
                 autoFocus
                 autoComplete="username"
               />

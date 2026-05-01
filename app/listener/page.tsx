@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X } from "lucide-react";
 import Nav from "@/components/Nav";
@@ -8,6 +8,9 @@ import Footer from "@/components/Footer";
 import BookingCard, { BookingCardData } from "@/components/BookingCard";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { formatDayHeader, formatDayKey, formatTime, formatTimeRange } from "@/lib/format";
+import { TimeoutError, withTimeout } from "@/lib/with-timeout";
+
+const QUERY_TIMEOUT_MS = 10_000;
 
 type Slot = {
   id: string;
@@ -20,15 +23,25 @@ type RawBooking = {
   id: string;
   format: "text" | "voice";
   status: "upcoming" | "completed" | "cancelled";
-  user: { username: string } | { username: string }[];
-  slot: { start_time: string; end_time: string } | { start_time: string; end_time: string }[];
+  user: { username: string } | { username: string }[] | null;
+  slot:
+    | { start_time: string; end_time: string }
+    | { start_time: string; end_time: string }[]
+    | null;
 };
 
 type SectionTab = "slots" | "bookings";
 
+function describeError(err: unknown): string {
+  if (err instanceof TimeoutError) return err.message;
+  if (err instanceof Error) return err.message;
+  return "未知错误";
+}
+
 export default function ListenerPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [bookings, setBookings] = useState<BookingCardData[]>([]);
@@ -41,66 +54,103 @@ export default function ListenerPage() {
     return () => clearInterval(t);
   }, []);
 
-  async function reload() {
-    const supabase = createBrowserClient();
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) {
-      router.push("/login?redirect=/listener");
-      return;
-    }
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("username, is_listener, listener_application_at")
-      .eq("id", auth.user.id)
-      .single();
-    if (!profile?.is_listener) {
-      if (profile?.listener_application_at) {
-        router.push("/listener/pending");
-      } else {
-        router.push("/me");
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const supabase = createBrowserClient();
+
+      const authRes = await withTimeout(
+        supabase.auth.getUser(),
+        QUERY_TIMEOUT_MS,
+        "获取登录状态超时，请检查网络后重试"
+      );
+      if (authRes.error || !authRes.data.user) {
+        router.push("/login?redirect=/listener");
+        return;
       }
-      return;
-    }
-    setUsername(profile.username);
+      const userId = authRes.data.user.id;
 
-    const nowIso = new Date().toISOString();
-    const { data: slotRows } = await supabase
-      .from("time_slots")
-      .select("id, start_time, end_time, is_booked")
-      .eq("listener_id", auth.user.id)
-      .gte("end_time", nowIso)
-      .order("start_time", { ascending: true });
-    setSlots(slotRows || []);
+      const profileRes = await withTimeout(
+        supabase
+          .from("profiles")
+          .select("username, is_listener, listener_application_at")
+          .eq("id", userId)
+          .single(),
+        QUERY_TIMEOUT_MS,
+        "读取账号信息超时，请检查网络后重试"
+      );
+      if (profileRes.error) {
+        throw new Error(`读取账号信息失败：${profileRes.error.message}`);
+      }
+      const profile = profileRes.data;
+      if (!profile?.is_listener) {
+        if (profile?.listener_application_at) {
+          router.push("/listener/pending");
+        } else {
+          router.push("/me");
+        }
+        return;
+      }
+      setUsername(profile.username);
 
-    const { data: bookingRows } = await supabase
-      .from("bookings")
-      .select(
-        "id, format, status, user:profiles!bookings_user_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
-      )
-      .eq("listener_id", auth.user.id)
-      .order("created_at", { ascending: false });
-    if (bookingRows) {
-      const mapped: BookingCardData[] = (bookingRows as RawBooking[]).map((r) => {
-        const user = Array.isArray(r.user) ? r.user[0] : r.user;
-        const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
-        return {
-          id: r.id,
-          format: r.format,
-          status: r.status,
-          counterpartyUsername: user.username,
-          startTime: slot.start_time,
-          endTime: slot.end_time,
-        };
-      });
+      const nowIso = new Date().toISOString();
+      const slotsRes = await withTimeout(
+        supabase
+          .from("time_slots")
+          .select("id, start_time, end_time, is_booked")
+          .eq("listener_id", userId)
+          .gte("end_time", nowIso)
+          .order("start_time", { ascending: true }),
+        QUERY_TIMEOUT_MS,
+        "读取时段超时，请检查网络后重试"
+      );
+      if (slotsRes.error) {
+        throw new Error(`读取时段失败：${slotsRes.error.message}`);
+      }
+      setSlots(slotsRes.data ?? []);
+
+      const bookingsRes = await withTimeout(
+        supabase
+          .from("bookings")
+          .select(
+            "id, format, status, user:profiles!bookings_user_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
+          )
+          .eq("listener_id", userId)
+          .order("created_at", { ascending: false }),
+        QUERY_TIMEOUT_MS,
+        "读取预约超时，请检查网络后重试"
+      );
+      if (bookingsRes.error) {
+        throw new Error(`读取预约失败：${bookingsRes.error.message}`);
+      }
+      const mapped: BookingCardData[] = (bookingsRes.data as RawBooking[] | null ?? [])
+        .map((r) => {
+          const user = Array.isArray(r.user) ? r.user[0] : r.user;
+          const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
+          if (!slot) return null;
+          return {
+            id: r.id,
+            format: r.format,
+            status: r.status,
+            counterpartyUsername: user?.username ?? "匿名",
+            startTime: slot.start_time,
+            endTime: slot.end_time,
+          };
+        })
+        .filter((b): b is BookingCardData => b !== null);
       setBookings(mapped);
+    } catch (err) {
+      console.error("listener dashboard load failed", err);
+      setLoadError(describeError(err));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }
+  }, [router]);
 
   useEffect(() => {
     reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [reload]);
 
   async function deleteSlot(id: string) {
     if (!confirm("确认删除这个时段？")) return;
@@ -130,6 +180,13 @@ export default function ListenerPage() {
 
           {loading ? (
             <div className="text-muted text-center py-12">载入中...</div>
+          ) : loadError ? (
+            <div className="card text-center space-y-3">
+              <p className="text-danger">{loadError}</p>
+              <button onClick={() => reload()} className="btn-primary">
+                重新加载
+              </button>
+            </div>
           ) : tab === "slots" ? (
             <SlotsSection slots={slots} onAdd={() => setShowAdd(true)} onDelete={deleteSlot} />
           ) : (
