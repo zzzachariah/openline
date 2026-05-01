@@ -88,31 +88,31 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
           <span className="text-[15px] font-medium tracking-tight">openline</span>
         </Link>
 
-        <div className="hidden md:flex items-center gap-1">
-          <Link href="/" className="btn-ghost text-[14px]">介绍</Link>
+        <div className="hidden md:flex items-center gap-2">
+          <Link href="/" className="btn-nav text-[14px]">介绍</Link>
           {!user && (
             <>
-              <Link href="/book" className="btn-ghost text-[14px]">预约</Link>
-              <Link href="/login" className="btn-ghost text-[14px]">登录</Link>
+              <Link href="/book" className="btn-nav text-[14px]">预约</Link>
+              <Link href="/login" className="btn-nav text-[14px]">登录</Link>
             </>
           )}
           {user && !user.is_listener && !user.listener_application_at && (
             <>
-              <Link href="/book" className="btn-ghost text-[14px]">预约</Link>
-              <Link href="/me" className="btn-ghost text-[14px]">我的</Link>
+              <Link href="/book" className="btn-nav text-[14px]">预约</Link>
+              <Link href="/me" className="btn-nav text-[14px]">我的</Link>
             </>
           )}
           {user && !user.is_listener && user.listener_application_at && (
-            <Link href="/listener/pending" className="btn-ghost text-[14px]">审核中</Link>
+            <Link href="/listener/pending" className="btn-nav text-[14px]">审核中</Link>
           )}
           {user && user.is_listener && (
-            <Link href="/listener" className="btn-ghost text-[14px]">后台</Link>
+            <Link href="/listener" className="btn-nav text-[14px]">后台</Link>
           )}
           {user && (
             <div className="relative">
               <button
                 onClick={() => setDropdownOpen((v) => !v)}
-                className="btn-ghost text-[14px] flex items-center gap-1"
+                className="btn-nav text-[14px] flex items-center gap-1"
               >
                 {user.username}
                 <ChevronDown size={14} />
