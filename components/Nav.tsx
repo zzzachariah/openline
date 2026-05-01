@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 type NavUser = {
   username: string;
   is_listener: boolean;
+  listener_application_at: string | null;
 } | null;
 
 type NavProps = {
@@ -52,7 +53,7 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
       }
       const { data: profile } = await supabase
         .from("profiles")
-        .select("username, is_listener")
+        .select("username, is_listener, listener_application_at")
         .eq("id", auth.user.id)
         .single();
       if (active && profile) setUser(profile as NavUser);
@@ -95,11 +96,14 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
               <Link href="/login" className="btn-ghost text-[14px]">登录</Link>
             </>
           )}
-          {user && !user.is_listener && (
+          {user && !user.is_listener && !user.listener_application_at && (
             <>
               <Link href="/book" className="btn-ghost text-[14px]">预约</Link>
               <Link href="/me" className="btn-ghost text-[14px]">我的</Link>
             </>
+          )}
+          {user && !user.is_listener && user.listener_application_at && (
+            <Link href="/listener/pending" className="btn-ghost text-[14px]">审核中</Link>
           )}
           {user && user.is_listener && (
             <Link href="/listener" className="btn-ghost text-[14px]">后台</Link>
@@ -121,11 +125,21 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
                   />
                   <div className="absolute right-0 top-full mt-1 w-44 bg-surface border border-border rounded-lg py-1 shadow-sm z-20">
                     <Link
-                      href={user.is_listener ? "/listener" : "/me"}
+                      href={
+                        user.is_listener
+                          ? "/listener"
+                          : user.listener_application_at
+                          ? "/listener/pending"
+                          : "/me"
+                      }
                       onClick={() => setDropdownOpen(false)}
                       className="block px-3 py-2 text-[14px] hover:bg-accent-soft"
                     >
-                      {user.is_listener ? "倾听者后台" : "我的预约"}
+                      {user.is_listener
+                        ? "倾听者后台"
+                        : user.listener_application_at
+                        ? "申请审核中"
+                        : "我的预约"}
                     </Link>
                     <button
                       onClick={() => {
@@ -162,11 +176,14 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
                 <Link href="/login" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">登录</Link>
               </>
             )}
-            {user && !user.is_listener && (
+            {user && !user.is_listener && !user.listener_application_at && (
               <>
                 <Link href="/book" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">预约</Link>
                 <Link href="/me" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">我的预约</Link>
               </>
+            )}
+            {user && !user.is_listener && user.listener_application_at && (
+              <Link href="/listener/pending" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">申请审核中</Link>
             )}
             {user && user.is_listener && (
               <Link href="/listener" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">倾听者后台</Link>

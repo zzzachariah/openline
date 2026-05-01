@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { generateUsername, usernameToEmail } from "@/lib/username";
+import {
+  generateUsername,
+  generateListenerUsername,
+  usernameToEmail,
+} from "@/lib/username";
+
+type Role = "user" | "listener";
 
 export async function POST(req: NextRequest) {
-  let body: { password?: string };
+  let body: { password?: string; role?: Role };
   try {
     body = await req.json();
   } catch {
@@ -15,6 +21,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "密码至少需要 6 位" }, { status: 400 });
   }
 
+  const role: Role = body.role === "listener" ? "listener" : "user";
+
   const admin = createServiceRoleClient();
 
   let username: string | null = null;
@@ -22,7 +30,8 @@ export async function POST(req: NextRequest) {
   let lastError: string | null = null;
 
   for (let attempt = 0; attempt < 5; attempt++) {
-    const candidate = generateUsername();
+    const candidate =
+      role === "listener" ? generateListenerUsername() : generateUsername();
     const email = usernameToEmail(candidate);
 
     const { data: existing } = await admin
@@ -50,11 +59,21 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    const { error: profileError } = await admin.from("profiles").insert({
+    const profileRow: {
+      id: string;
+      username: string;
+      is_listener: boolean;
+      listener_application_at?: string;
+    } = {
       id: created.user.id,
       username: candidate,
       is_listener: false,
-    });
+    };
+    if (role === "listener") {
+      profileRow.listener_application_at = new Date().toISOString();
+    }
+
+    const { error: profileError } = await admin.from("profiles").insert(profileRow);
 
     if (profileError) {
       // Roll back the auth user we just created so we can retry cleanly
@@ -77,5 +96,5 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ username });
+  return NextResponse.json({ username, role });
 }
