@@ -242,7 +242,7 @@ export default function HomePage() {
         >
           <div className="text-center space-y-12">
             <p className="text-[36px] sm:text-display font-medium tracking-tight fade-up">
-              完全免费。
+              完全免费
             </p>
             <div className="space-y-7 text-body-lg max-w-md mx-auto">
               <p className="fade-up fade-up-delay-1">
@@ -278,18 +278,14 @@ export default function HomePage() {
             <p className="fade-up fade-up-delay-1">
               我们在这里担保，
               <br />
-              与你的聊天内容坚决不会被以任何途径
-              <br />
-              转发或分享给任何人——
+              与你的聊天内容坚决不会被以任何途径转发或分享给任何人——
             </p>
             <p className="fade-up fade-up-delay-2">不是你的父母、不是你的学校、不是你的公司……</p>
             <p className="fade-up fade-up-delay-3">我们不需要你的真实姓名，不需要你的电话。</p>
             <p className="fade-up fade-up-delay-4">
               聊天记录会在 7 天后自动删除；
               <br />
-              当然，你也可以选择用喜欢的任何形式
-              <br />
-              保留我们的对话。
+              当然，你也可以选择用喜欢的任何形式保留我们的对话。
             </p>
             <div className="flex justify-start fade-up fade-up-delay-5">
               <span className="block w-[60px] h-px bg-accent" aria-hidden="true" />
@@ -297,9 +293,7 @@ export default function HomePage() {
             <div className="space-y-4 text-[15px] text-muted leading-relaxed">
               <p className="fade-up fade-up-delay-5">唯一的例外：</p>
               <p className="fade-up fade-up-delay-5">
-                如果在聊天中出现明确的、紧急的安全风险
-                <br />
-                （比如有伤害自己或他人的行为），
+                如果在聊天中出现明确的、紧急的安全风险（比如有伤害自己或他人的行为），
                 <br />
                 Listeners 会引导你联系专业的危机干预资源。
               </p>
@@ -324,18 +318,12 @@ export default function HomePage() {
           <div className="space-y-7 text-body-lg">
             <h2 className="text-h2 font-medium tracking-tight fade-up">倾听者是谁</h2>
             <p className="fade-up fade-up-delay-1">
-              我们不是专业心理咨询师，
-              <br />
-              也不会这样自称。
+              我们不是专业心理咨询师，也不会这样自称。
             </p>
             <p className="fade-up fade-up-delay-2">
               你我都是普通人，
               <br />
-              但我们知道如何正确地倾听，
-              <br />
-              协助进行力所能及的引导，
-              <br />
-              帮助给予相对可行的建议。
+              但我们知道如何正确地倾听，协助进行力所能及的引导，帮助给予相对可行的建议。
             </p>
             <div className="fade-up fade-up-delay-3">
               <p className="mb-3">每一位倾听者在开始之前都会学习：</p>
@@ -353,11 +341,7 @@ export default function HomePage() {
             <p className="fade-up fade-up-delay-4">
               我们能做的事情很有限：
               <br />
-              陪你聊聊天；认真听你的故事；
-              <br />
-              必要的时候提醒你
-              <br />
-              &ldquo;这个事情可能需要更专业的人&rdquo;。
+              陪你聊聊天；认真听你的故事；必要的时候提醒你&ldquo;这个事情可能需要更专业的人&rdquo;。
             </p>
             <p className="fade-up fade-up-delay-5">
               我们不做诊断，不去开药，
@@ -375,34 +359,29 @@ export default function HomePage() {
           onChevronClick={() => scrollToSlide(9)}
         >
           <div className="space-y-7 text-body-lg">
-            <p className="fade-up">我们会直接告诉你。</p>
-            <p className="fade-up fade-up-delay-1">
+            <h2 className="text-h2 font-medium tracking-tight fade-up">如果我们觉得你需要更专业的帮助</h2>
+            <p className="fade-up fade-up-delay-1">我们会直接告诉你。</p>
+            <p className="fade-up fade-up-delay-2">
               不是为了把你推走，
               <br />
-              而是因为有些情况已经超出了
-              <br />
-              &ldquo;聊一聊&rdquo;能处理的范围——
+              而是因为有些情况已经超出了&ldquo;聊一聊&rdquo;能处理的范围——
             </p>
-            <p className="fade-up fade-up-delay-2">
+            <p className="fade-up fade-up-delay-3">
               比如持续很久的情绪低落、
               <br />
               影响到吃饭睡觉、
               <br />
               有伤害自己的念头。
             </p>
-            <p className="fade-up fade-up-delay-3">
-              我们不想耽误你，
-              <br />
-              也不想让你受到伤害。
-            </p>
             <p className="fade-up fade-up-delay-4">
+              我们不想耽误你，也不想让你受到伤害。
+            </p>
+            <p className="fade-up fade-up-delay-5">
               如果到了那一步，
               <br />
               我们会尽力给你一个清晰的下一步方向：
               <br />
-              可以去哪里求助，有哪些渠道可以选择，
-              <br />
-              不同情况可以找谁。
+              可以去哪里求助，有哪些渠道可以选择，不同情况可以找谁。
             </p>
           </div>
         </Slide>

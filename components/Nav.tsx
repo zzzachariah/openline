@@ -78,8 +78,8 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
 
   return (
     <nav
-      className={`fixed top-0 left-0 right-0 z-40 transition-colors duration-300 ${
-        showSolid ? "bg-background border-b border-border" : "bg-transparent"
+      className={`fixed top-0 left-0 right-0 z-40 transition-colors duration-300 border-b border-border ${
+        showSolid ? "bg-background" : "bg-transparent"
       }`}
     >
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
@@ -89,11 +89,11 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
         </Link>
 
         <div className="hidden md:flex items-center gap-1">
-          <Link href="/" className="btn-ghost text-[14px]">介绍</Link>
+          <Link href="/" className="btn-ghost text-[14px] !border-border">介绍</Link>
           {!user && (
             <>
-              <Link href="/book" className="btn-ghost text-[14px]">预约</Link>
-              <Link href="/login" className="btn-ghost text-[14px]">登录</Link>
+              <Link href="/book" className="btn-ghost text-[14px] !border-border">预约</Link>
+              <Link href="/login" className="btn-ghost text-[14px] !border-border">登录</Link>
             </>
           )}
           {user && !user.is_listener && !user.listener_application_at && (
