@@ -28,3 +28,22 @@ export function usernameToEmail(username: string): string {
   const suffix = username.replace(/^匿名用户/, "").toLowerCase();
   return `${suffix}@openline.local`;
 }
+
+// Returns every email format we should try for a typed username, in order.
+// Lets a listener log in by typing only the 6-char suffix (e.g. "A3K9P2")
+// instead of the full "匿名倾听者A3K9P2".
+export function usernameToEmailCandidates(username: string): string[] {
+  const trimmed = username.trim();
+  if (!trimmed) return [];
+  if (trimmed.startsWith("匿名倾听者")) {
+    const suffix = trimmed.slice("匿名倾听者".length).toLowerCase();
+    return [`l_${suffix}@openline.local`];
+  }
+  if (trimmed.startsWith("匿名用户")) {
+    const suffix = trimmed.slice("匿名用户".length).toLowerCase();
+    return [`${suffix}@openline.local`];
+  }
+  // Bare suffix — try regular user first, then listener.
+  const suffix = trimmed.toLowerCase();
+  return [`${suffix}@openline.local`, `l_${suffix}@openline.local`];
+}

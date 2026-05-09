@@ -93,6 +93,9 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
           {!user && (
             <>
               <Link href="/book" className="btn-ghost text-[14px]">预约</Link>
+              <Link href="/listener/signup" className="btn-ghost text-[14px]">
+                成为倾听者
+              </Link>
               <Link href="/login" className="btn-ghost text-[14px]">登录</Link>
             </>
           )}
@@ -173,6 +176,9 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
             {!user && (
               <>
                 <Link href="/book" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">预约</Link>
+                <Link href="/listener/signup" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">
+                  成为倾听者
+                </Link>
                 <Link href="/login" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">登录</Link>
               </>
             )}

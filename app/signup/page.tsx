@@ -19,6 +19,7 @@ function SignupContent() {
   const [confirm, setConfirm] = useState("");
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [created, setCreated] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -26,6 +27,7 @@ function SignupContent() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setErrorDetail(null);
 
     if (password.length < 6) {
       setError("密码至少需要 6 位");
@@ -46,6 +48,7 @@ function SignupContent() {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "注册失败，请稍后再试");
+        if (data.detail) setErrorDetail(String(data.detail));
         setLoading(false);
         return;
       }
@@ -59,15 +62,25 @@ function SignupContent() {
       });
       if (signInError) {
         setError("注册成功但登录失败，请前往登录页");
+        setErrorDetail(signInError.message);
         setLoading(false);
         return;
       }
+      // Make sure middleware picks up the freshly-set auth cookies before the
+      // user navigates away.
+      router.refresh();
       setCreated(username);
       setLoading(false);
-    } catch {
+    } catch (e) {
       setError("网络错误，请稍后再试");
+      setErrorDetail(e instanceof Error ? e.message : String(e));
       setLoading(false);
     }
+  }
+
+  function handleContinue() {
+    router.push(redirect);
+    router.refresh();
   }
 
   async function copyUsername() {
@@ -125,7 +138,14 @@ function SignupContent() {
                   minLength={6}
                 />
                 {error && (
-                  <div className="text-[14px] text-danger leading-relaxed">{error}</div>
+                  <div className="text-[14px] text-danger leading-relaxed">
+                    {error}
+                    {errorDetail && (
+                      <div className="mt-1 text-[12px] text-muted font-mono break-all">
+                        {errorDetail}
+                      </div>
+                    )}
+                  </div>
                 )}
                 <button type="submit" disabled={loading} className="btn-primary w-full">
                   {loading ? "注册中..." : "注册"}
@@ -172,10 +192,7 @@ function SignupContent() {
                 <br />
                 换设备登录时需要它。
               </p>
-              <button
-                onClick={() => router.push(redirect)}
-                className="btn-primary w-full"
-              >
+              <button onClick={handleContinue} className="btn-primary w-full">
                 继续 →
               </button>
             </div>

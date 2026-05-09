@@ -364,6 +364,11 @@ export default function HomePage() {
               <br />
               也不会主观替你做任何决定。
             </p>
+            <div className="fade-up fade-up-delay-6 pt-2">
+              <Link href="/listener/signup" className="btn-secondary">
+                想成为倾听者？申请加入
+              </Link>
+            </div>
           </div>
         </Slide>
 

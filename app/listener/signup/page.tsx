@@ -17,13 +17,16 @@ function ListenerSignupContent() {
   const [confirm, setConfirm] = useState("");
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [created, setCreated] = useState<string | null>(null);
+  const [signedIn, setSignedIn] = useState(false);
   const [copied, setCopied] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setErrorDetail(null);
 
     if (password.length < 6) {
       setError("密码至少需要 6 位");
@@ -44,6 +47,7 @@ function ListenerSignupContent() {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "注册失败，请稍后再试");
+        if (data.detail) setErrorDetail(String(data.detail));
         setLoading(false);
         return;
       }
@@ -59,14 +63,31 @@ function ListenerSignupContent() {
         // Account exists but sign-in failed; still show the username so they
         // can log in manually after.
         setCreated(username);
+        setSignedIn(false);
+        setErrorDetail(signInError.message);
         setLoading(false);
         return;
       }
+      router.refresh();
       setCreated(username);
+      setSignedIn(true);
       setLoading(false);
-    } catch {
+    } catch (e) {
       setError("网络错误，请稍后再试");
+      setErrorDetail(e instanceof Error ? e.message : String(e));
       setLoading(false);
+    }
+  }
+
+  function handleContinue() {
+    if (signedIn) {
+      router.push("/listener/pending");
+      router.refresh();
+    } else {
+      // Sign-in failed during signup — send them to the login page so they can
+      // sign in manually with the username they just saved.
+      router.push("/login?redirect=/listener/pending");
+      router.refresh();
     }
   }
 
@@ -129,7 +150,14 @@ function ListenerSignupContent() {
                   minLength={6}
                 />
                 {error && (
-                  <div className="text-[14px] text-danger leading-relaxed">{error}</div>
+                  <div className="text-[14px] text-danger leading-relaxed">
+                    {error}
+                    {errorDetail && (
+                      <div className="mt-1 text-[12px] text-muted font-mono break-all">
+                        {errorDetail}
+                      </div>
+                    )}
+                  </div>
                 )}
                 <button type="submit" disabled={loading} className="btn-primary w-full">
                   {loading ? "提交中..." : "提交申请"}
@@ -177,11 +205,13 @@ function ListenerSignupContent() {
                   )}
                 </button>
               </div>
-              <button
-                onClick={() => router.push("/listener/pending")}
-                className="btn-primary w-full"
-              >
-                查看审核状态 →
+              {!signedIn && (
+                <p className="text-[13px] text-muted mb-4 leading-relaxed">
+                  没有自动登录，下一步会跳到登录页，请用刚才记下的用户名和密码登录。
+                </p>
+              )}
+              <button onClick={handleContinue} className="btn-primary w-full">
+                {signedIn ? "查看审核状态 →" : "去登录 →"}
               </button>
             </div>
           )}

@@ -8,7 +8,7 @@ import Logo from "@/components/Logo";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import { createBrowserClient } from "@/lib/supabase/client";
-import { usernameToEmail } from "@/lib/username";
+import { usernameToEmailCandidates } from "@/lib/username";
 
 function LoginContent() {
   const router = useRouter();
@@ -31,11 +31,21 @@ function LoginContent() {
     }
     setLoading(true);
     const supabase = createBrowserClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: usernameToEmail(u),
-      password,
-    });
-    if (signInError) {
+    // Try each plausible email format in turn. This lets a listener type
+    // either "匿名倾听者A3K9P2" or just "A3K9P2".
+    const candidates = usernameToEmailCandidates(u);
+    let signedIn = false;
+    for (const email of candidates) {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (!signInError) {
+        signedIn = true;
+        break;
+      }
+    }
+    if (!signedIn) {
       setError("用户名或密码不正确");
       setLoading(false);
       return;
@@ -62,6 +72,7 @@ function LoginContent() {
       router.refresh();
     } else {
       router.push("/me");
+      router.refresh();
     }
   }
 
@@ -77,6 +88,8 @@ function LoginContent() {
             <h1 className="text-h2 font-medium tracking-tight text-center mb-2">登录</h1>
             <p className="text-caption text-muted text-center mb-7">
               输入你保存的用户名和密码。
+              <br />
+              倾听者也可以只输入 6 位后缀。
             </p>
             <form onSubmit={handleSubmit} className="space-y-4">
               <input
@@ -84,7 +97,7 @@ function LoginContent() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="input"
-                placeholder="用户名（如 匿名用户A3K9P2）"
+                placeholder="用户名或后缀（如 A3K9P2）"
                 autoFocus
                 autoComplete="username"
               />
