@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, X, CalendarDays, CalendarRange } from "lucide-react";
@@ -12,6 +12,9 @@ import WeekCalendar, { WeekSlot } from "@/components/Calendar/WeekCalendar";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { formatTime, formatTimeRange } from "@/lib/format";
 import { dayKey, isSameDay, startOfDay } from "@/lib/calendar";
+import { TimeoutError, withTimeout } from "@/lib/with-timeout";
+
+const QUERY_TIMEOUT_MS = 15_000;
 
 type Slot = {
   id: string;

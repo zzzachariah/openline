@@ -94,7 +94,7 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
         showSolid ? "bg-background" : "bg-transparent"
       }`}
     >
-      <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 text-foreground">
           <Logo size={26} className="text-accent" />
           <span className="text-[15px] font-medium tracking-tight">openline</span>
