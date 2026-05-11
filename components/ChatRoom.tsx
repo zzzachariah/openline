@@ -454,18 +454,18 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
                   value={meetingCode}
                   onChange={(e) => setMeetingCode(e.target.value)}
                   placeholder="粘贴腾讯会议号"
-                  className="input flex-1"
+                  className="block flex-1 h-11 rounded-lg border border-border bg-surface text-foreground text-[15px] px-3.5 outline-none focus:border-accent placeholder:text-muted transition-colors"
                 />
                 <button
                   onClick={handleSendMeetingCode}
                   disabled={!meetingCode.trim()}
-                  className="btn-primary"
+                  className="inline-flex items-center justify-center h-11 px-5 rounded-full bg-accent text-white border border-accent text-[15px] font-medium transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                 >
                   发送
                 </button>
                 <button
                   onClick={() => setMeetingPanelOpen(false)}
-                  className="btn-ghost"
+                  className="inline-flex items-center justify-center h-11 px-4 rounded-full text-foreground text-[15px] font-medium hover:bg-accent-soft transition-colors shrink-0"
                 >
                   取消
                 </button>
@@ -479,7 +479,7 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
                   onKeyDown={onKeyDown}
                   placeholder="说点什么..."
                   rows={1}
-                  className="input resize-none min-h-[44px] max-h-32 py-2.5"
+                  className="block w-full resize-none rounded-lg border border-border bg-surface text-foreground text-[15px] leading-5 py-[11px] px-3.5 min-h-[44px] max-h-32 outline-none focus:border-accent placeholder:text-muted transition-colors"
                   style={{ paddingRight: draft.length > 800 ? 60 : undefined }}
                 />
                 {draft.length > 800 && (
@@ -492,7 +492,7 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
                 <button
                   type="button"
                   onClick={() => setMeetingPanelOpen((v) => !v)}
-                  className="btn-secondary py-2.5 px-3 text-[13px]"
+                  className="inline-flex items-center justify-center h-11 px-4 rounded-full border border-border text-[13px] text-foreground hover:border-accent hover:bg-accent-soft transition-colors shrink-0"
                   title="发送腾讯会议号"
                 >
                   发送会议号
@@ -501,7 +501,7 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
               <button
                 onClick={handleSend}
                 disabled={!draft.trim() || sessionEnded}
-                className="btn-primary py-2.5 px-4"
+                className="inline-flex items-center justify-center h-11 w-11 rounded-full bg-accent text-white border border-accent transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                 aria-label="发送"
               >
                 <Send size={16} />
