@@ -1,5 +1,4 @@
 import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
 import Skeleton from "@/components/Skeleton";
 
 function SkeletonSlotButton() {
@@ -18,7 +17,7 @@ export default function BookLoading() {
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
+      <main className="pt-24 pb-16">
         <div className="max-w-[640px] mx-auto px-6">
           <Skeleton className="h-9 w-48 mb-3" />
           <Skeleton className="h-[14px] w-full max-w-md mb-10" />
@@ -36,7 +35,6 @@ export default function BookLoading() {
           </div>
         </div>
       </main>
-      <Footer />
     </>
   );
 }

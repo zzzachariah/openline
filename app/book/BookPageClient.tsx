@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { formatDayHeader, formatDayKey, formatTimeRange } from "@/lib/format";
 import { useAvailableSlots } from "@/lib/hooks/useAvailableSlots";
@@ -89,7 +88,7 @@ export default function BookPageClient({ initialSlots }: Props) {
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
+      <main className="pt-24 pb-16">
         <div className="max-w-[640px] mx-auto px-6">
           <h1 className="text-h2 font-medium tracking-tight mb-2">选择一个时段</h1>
           <p className="text-caption text-muted mb-10">
@@ -140,7 +139,6 @@ export default function BookPageClient({ initialSlots }: Props) {
           )}
         </div>
       </main>
-      <Footer />
 
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
