@@ -7,8 +7,6 @@ import { formatDate, formatTimeRange, formatCountdown } from "@/lib/format";
 
 export type BookingCardData = {
   id: string;
-  userId: string;
-  listenerId: string;
   format: "text" | "voice";
   status: "upcoming" | "completed" | "cancelled";
   counterpartyUsername: string;
@@ -89,7 +87,9 @@ export default function BookingCard({
           )}
         </div>
         {effectiveStatus === "upcoming" && !inWindow && (
-          <div className="text-caption text-muted pt-1">{formatCountdown(startTs - now)}</div>
+          <div className="text-caption text-muted pt-1 tabular-nums">
+            {formatCountdown(startTs - now)}
+          </div>
         )}
       </div>
       <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">

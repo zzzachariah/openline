@@ -17,7 +17,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { motion } from "framer-motion";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { formatTime } from "@/lib/format";
-import ReviewPanel, { Review } from "./ReviewPanel";
+import ChatRoomSkeleton from "./ChatRoomSkeleton";
 
 type Message = {
   id: string;
@@ -61,7 +61,8 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
   const [meetingCode, setMeetingCode] = useState("");
   const [resourcesOpen, setResourcesOpen] = useState(false);
   const [endingSent, setEndingSent] = useState(false);
-  const [review, setReview] = useState<Review | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [saveBusy, setSaveBusy] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -157,20 +158,8 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
         is_saved: !!b.is_saved,
       });
 
-      const { data: msgs } = await supabase
-        .from("messages")
-        .select("id, booking_id, sender_id, content, message_type, created_at")
-        .eq("booking_id", bookingId)
-        .order("created_at", { ascending: true });
-      if (!cancelled && msgs) setMessages(msgs as Message[]);
-
-      const { data: rv } = await supabase
-        .from("reviews")
-        .select("*")
-        .eq("booking_id", bookingId)
-        .maybeSingle();
-      if (!cancelled && rv) setReview(rv as Review);
-
+      await fetchMessages();
+      if (cancelled) return;
       setLoading(false);
 
       channel = supabase
@@ -444,11 +433,9 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
       {sessionEnded ? (
         <EndedFooter
           role={role}
-          bookingId={booking.id}
-          userId={booking.user_id}
-          listenerId={booking.listener_id}
-          review={review}
-          onReviewChange={setReview}
+          isSaved={booking.is_saved}
+          saveBusy={saveBusy}
+          onToggleSaved={role === "user" ? toggleSaved : undefined}
           resourcesOpen={resourcesOpen}
           setResourcesOpen={setResourcesOpen}
           pastRetention={pastRetention}
@@ -635,55 +622,70 @@ function groupMessages(messages: Message[]): Group[] {
 
 function EndedFooter({
   role,
-  bookingId,
-  userId,
-  listenerId,
-  review,
-  onReviewChange,
+  isSaved,
+  saveBusy,
+  onToggleSaved,
   resourcesOpen,
   setResourcesOpen,
   pastRetention,
 }: {
   role: "user" | "listener";
-  bookingId: string;
-  userId: string;
-  listenerId: string;
-  review: Review | null;
-  onReviewChange: (r: Review | null) => void;
+  isSaved: boolean;
+  saveBusy: boolean;
+  onToggleSaved?: () => void;
   resourcesOpen: boolean;
   setResourcesOpen: (v: boolean) => void;
   pastRetention: boolean;
 }) {
   return (
-    <div className="flex-1 overflow-y-auto px-6">
-      <div className="max-w-prose mx-auto w-full py-12">
-        <p className="text-h2 font-medium tracking-tight text-center mb-10">
-          这次倾诉结束了。
-        </p>
-        <div className="mb-10">
-          <ReviewPanel
-            bookingId={bookingId}
-            userId={userId}
-            listenerId={listenerId}
-            role={role}
-            initialReview={review}
-            onReviewChange={onReviewChange}
-          />
+    <div className="border-t border-border bg-background">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="text-[14px] text-muted">
+            {pastRetention
+              ? "这次倾诉的聊天记录已自动删除。"
+              : isSaved
+              ? "这次的聊天记录已保存，不会被自动删除。"
+              : "未保存的聊天记录会在 7 天后自动删除，倾诉记录会一直保留。"}
+          </div>
+          {onToggleSaved && !pastRetention && (
+            <button
+              onClick={onToggleSaved}
+              disabled={saveBusy}
+              className={`inline-flex items-center gap-1.5 text-[13px] px-3 py-1.5 rounded-md border transition-colors ${
+                isSaved
+                  ? "border-accent text-accent bg-accent-soft"
+                  : "border-border text-muted hover:text-foreground"
+              } ${saveBusy ? "opacity-60" : ""}`}
+            >
+              {isSaved ? (
+                <>
+                  <BookmarkCheck size={14} />
+                  已保存
+                </>
+              ) : (
+                <>
+                  <Bookmark size={14} />
+                  保存聊天记录
+                </>
+              )}
+            </button>
+          )}
         </div>
-        <p className="text-[15px] text-foreground/85 leading-relaxed text-center mb-6">
-          如果今天聊的内容让你觉得有些事情可能需要更专业的帮助，
-        </p>
-        <button
-          onClick={() => setResourcesOpen(!resourcesOpen)}
-          className="mx-auto flex items-center gap-1 text-[14px] text-accent mb-4"
-        >
-          {resourcesOpen ? "收起" : "展开"}{" "}
-          <ChevronDown
-            size={14}
-            className={`transition-transform ${resourcesOpen ? "rotate-180" : ""}`}
-          />
-          {!resourcesOpen && <span className="ml-1 text-foreground">这里有一些资源</span>}
-        </button>
+
+        <div className="text-center">
+          <button
+            onClick={() => setResourcesOpen(!resourcesOpen)}
+            className="inline-flex items-center gap-1 text-[14px] text-accent"
+          >
+            {resourcesOpen ? "收起" : "如果想看一些专业资源"}{" "}
+            <ChevronDown
+              size={14}
+              className={`transition-transform ${resourcesOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+        </div>
+
         {resourcesOpen && (
           <div className="card text-[14px] leading-relaxed text-foreground/85 space-y-2">
             <ResourceItem text="全国心理援助热线: 400-161-9995" />
