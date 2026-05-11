@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { motion } from "framer-motion";
+import { Bookmark, BookmarkCheck } from "lucide-react";
 import { formatDate, formatTimeRange, formatCountdown } from "@/lib/format";
 
 export type BookingCardData = {
@@ -8,8 +10,10 @@ export type BookingCardData = {
   format: "text" | "voice";
   status: "upcoming" | "completed" | "cancelled";
   counterpartyUsername: string;
+  counterpartyId?: string;
   startTime: string;
   endTime: string;
+  isSaved: boolean;
 };
 
 type Props = {
@@ -17,9 +21,20 @@ type Props = {
   now: number;
   role: "user" | "listener";
   onCancel?: () => void;
+  onToggleSaved?: () => void;
+  saveBusy?: boolean;
 };
 
-export default function BookingCard({ booking, now, role, onCancel }: Props) {
+const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+export default function BookingCard({
+  booking,
+  now,
+  role,
+  onCancel,
+  onToggleSaved,
+  saveBusy,
+}: Props) {
   const start = new Date(booking.startTime);
   const end = new Date(booking.endTime);
   const startTs = start.getTime();
@@ -28,18 +43,26 @@ export default function BookingCard({ booking, now, role, onCancel }: Props) {
   const oneHourBeforeStart = startTs - 60 * 60 * 1000;
 
   const inWindow = now >= fiveMinBeforeStart && now <= endTs;
-  const cancellable = booking.status === "upcoming" && now < oneHourBeforeStart;
+  const effectiveStatus: BookingCardData["status"] =
+    booking.status === "upcoming" && now > endTs ? "completed" : booking.status;
+  const cancellable = effectiveStatus === "upcoming" && now < oneHourBeforeStart;
   const chatUrl = role === "user" ? `/chat/${booking.id}` : `/listener/chat/${booking.id}`;
+  const pastRetention =
+    booking.status === "completed" && !booking.isSaved && now - endTs > RETENTION_MS;
 
   const hasAction =
-    (booking.status === "upcoming" && inWindow) ||
-    booking.status === "completed" ||
-    (booking.status === "upcoming" && cancellable && onCancel);
+    (effectiveStatus === "upcoming" && inWindow) ||
+    effectiveStatus === "completed" ||
+    (effectiveStatus === "upcoming" && cancellable && onCancel);
 
   return (
-    <div className="card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+    <motion.div
+      whileHover={{ y: -2 }}
+      transition={{ type: "spring", stiffness: 320, damping: 28 }}
+      className="card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 hover:border-accent/40 transition-colors"
+    >
       <div className="space-y-1.5 flex-1 min-w-0">
-        <div className="text-[15px] font-medium leading-snug">
+        <div className="text-[15px] font-medium tabular-nums leading-snug">
           {formatDate(start)} {formatTimeRange(start, end)}
         </div>
         <div className="text-caption text-muted truncate">
@@ -50,30 +73,43 @@ export default function BookingCard({ booking, now, role, onCancel }: Props) {
             {booking.format === "text" ? "文字" : "语音"}
           </span>
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] border border-border text-muted">
-            {booking.status === "upcoming"
+            {effectiveStatus === "upcoming"
               ? "即将开始"
-              : booking.status === "completed"
+              : effectiveStatus === "completed"
               ? "已完成"
               : "已取消"}
           </span>
+          {booking.status === "completed" && booking.isSaved && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[12px] border border-accent text-accent">
+              <BookmarkCheck size={11} />
+              已保存
+            </span>
+          )}
+          {pastRetention && (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] border border-border text-muted">
+              聊天记录已删除
+            </span>
+          )}
         </div>
-        {booking.status === "upcoming" && !inWindow && (
-          <div className="text-caption text-muted pt-1">{formatCountdown(startTs - now)}</div>
+        {effectiveStatus === "upcoming" && !inWindow && (
+          <div className="text-caption text-muted pt-1 tabular-nums">
+            {formatCountdown(startTs - now)}
+          </div>
         )}
       </div>
       {hasAction && (
-        <div className="flex items-center gap-3 shrink-0 -mt-1 sm:mt-0 sm:flex-col sm:items-end">
-          {booking.status === "upcoming" && inWindow && (
+        <div className="flex items-center gap-3 shrink-0 -mt-1 sm:mt-0 sm:flex-row sm:items-center">
+          {effectiveStatus === "upcoming" && inWindow && (
             <Link href={chatUrl} className="btn-primary flex-1 sm:flex-initial">
               进入聊天室
             </Link>
           )}
-          {booking.status === "completed" && (
+          {effectiveStatus === "completed" && (
             <Link href={chatUrl} className="btn-secondary flex-1 sm:flex-initial">
               查看
             </Link>
           )}
-          {booking.status === "upcoming" && cancellable && onCancel && (
+          {effectiveStatus === "upcoming" && cancellable && onCancel && (
             <button
               onClick={onCancel}
               className="text-[13px] text-muted hover:text-danger transition-colors shrink-0 px-2 py-2 -mr-2"
@@ -83,6 +119,6 @@ export default function BookingCard({ booking, now, role, onCancel }: Props) {
           )}
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
