@@ -49,13 +49,23 @@ export default async function MePage() {
     redirect("/listener");
   }
 
+  const nowMs = Date.now();
+  const expiredIds: string[] = [];
   const bookings: BookingWithListener[] = ((rawBookings ?? []) as RawBooking[]).map((r) => {
     const listener = Array.isArray(r.listener) ? r.listener[0] : r.listener;
     const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
+    // Don't trust stale "upcoming" status if the slot already ended — flip to
+    // completed in memory so the page renders correctly even if the DB hasn't
+    // caught up yet (no chat-room visit / no cron).
+    let status: BookingCardData["status"] = r.status;
+    if (status === "upcoming" && new Date(slot.end_time).getTime() < nowMs) {
+      status = "completed";
+      expiredIds.push(r.id);
+    }
     const card: BookingCardData = {
       id: r.id,
       format: r.format,
-      status: r.status,
+      status,
       counterpartyUsername: listener.username,
       startTime: slot.start_time,
       endTime: slot.end_time,
@@ -63,6 +73,11 @@ export default async function MePage() {
     };
     return { ...card, listenerId: r.listener_id };
   });
+
+  // Persist the catch-up so any other view (and a later cron) sees consistent state.
+  if (expiredIds.length) {
+    await supabase.from("bookings").update({ status: "completed" }).in("id", expiredIds);
+  }
 
   const reviews: MyReview[] = (rawReviews ?? []) as MyReview[];
 

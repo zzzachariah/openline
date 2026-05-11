@@ -43,7 +43,9 @@ export default function BookingCard({
   const oneHourBeforeStart = startTs - 60 * 60 * 1000;
 
   const inWindow = now >= fiveMinBeforeStart && now <= endTs;
-  const cancellable = booking.status === "upcoming" && now < oneHourBeforeStart;
+  const effectiveStatus: BookingCardData["status"] =
+    booking.status === "upcoming" && now > endTs ? "completed" : booking.status;
+  const cancellable = effectiveStatus === "upcoming" && now < oneHourBeforeStart;
   const chatUrl = role === "user" ? `/chat/${booking.id}` : `/listener/chat/${booking.id}`;
   const pastRetention =
     booking.status === "completed" && !booking.isSaved && now - endTs > RETENTION_MS;
@@ -66,9 +68,9 @@ export default function BookingCard({
             {booking.format === "text" ? "文字" : "语音"}
           </span>
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] border border-border text-muted">
-            {booking.status === "upcoming"
+            {effectiveStatus === "upcoming"
               ? "即将开始"
-              : booking.status === "completed"
+              : effectiveStatus === "completed"
               ? "已完成"
               : "已取消"}
           </span>
@@ -84,48 +86,24 @@ export default function BookingCard({
             </span>
           )}
         </div>
-        {booking.status === "upcoming" && !inWindow && (
+        {effectiveStatus === "upcoming" && !inWindow && (
           <div className="text-caption text-muted pt-1 tabular-nums">
             {formatCountdown(startTs - now)}
           </div>
         )}
       </div>
       <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">
-        {booking.status === "upcoming" && inWindow && (
+        {effectiveStatus === "upcoming" && inWindow && (
           <Link href={chatUrl} className="btn-primary">
             进入聊天室
           </Link>
         )}
-        {booking.status === "completed" && (
+        {effectiveStatus === "completed" && (
           <Link href={chatUrl} className="btn-secondary">
             查看
           </Link>
         )}
-        {booking.status === "completed" && role === "user" && onToggleSaved && !pastRetention && (
-          <button
-            onClick={onToggleSaved}
-            disabled={saveBusy}
-            className={`inline-flex items-center gap-1 text-[13px] px-2.5 py-1 rounded-md border transition-colors ${
-              booking.isSaved
-                ? "border-accent text-accent bg-accent-soft"
-                : "border-border text-muted hover:text-foreground"
-            } ${saveBusy ? "opacity-60" : ""}`}
-            aria-label={booking.isSaved ? "取消保存" : "保存聊天记录"}
-          >
-            {booking.isSaved ? (
-              <>
-                <BookmarkCheck size={13} />
-                已保存
-              </>
-            ) : (
-              <>
-                <Bookmark size={13} />
-                保存
-              </>
-            )}
-          </button>
-        )}
-        {booking.status === "upcoming" && cancellable && onCancel && (
+        {effectiveStatus === "upcoming" && cancellable && onCancel && (
           <button
             onClick={onCancel}
             className="text-[13px] text-muted hover:text-danger transition-colors"

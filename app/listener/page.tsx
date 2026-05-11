@@ -63,19 +63,31 @@ export default async function ListenerPage() {
   }
 
   const slots: Slot[] = (slotRows ?? []) as Slot[];
+  const nowMs = Date.now();
+  const expiredIds: string[] = [];
   const bookings: BookingCardData[] = ((bookingRows ?? []) as RawBooking[]).map((r) => {
     const user = Array.isArray(r.user) ? r.user[0] : r.user;
     const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
+    let status: BookingCardData["status"] = r.status;
+    if (status === "upcoming" && new Date(slot.end_time).getTime() < nowMs) {
+      status = "completed";
+      expiredIds.push(r.id);
+    }
     return {
       id: r.id,
       format: r.format,
-      status: r.status,
+      status,
       counterpartyUsername: user.username,
       startTime: slot.start_time,
       endTime: slot.end_time,
       isSaved: !!r.is_saved,
     };
   });
+
+  if (expiredIds.length) {
+    await supabase.from("bookings").update({ status: "completed" }).in("id", expiredIds);
+  }
+
   const reviews: ReceivedReview[] = (reviewRows ?? []) as ReceivedReview[];
 
   return (
