@@ -1,6 +1,8 @@
-import { redirect } from "next/navigation";
-import { createServerClient } from "@/lib/supabase/server";
-import BookPageClient, { type Slot } from "./BookPageClient";
+"use client";
+
+import useSWR from "swr";
+import { createBrowserClient } from "@/lib/supabase/client";
+import type { Slot } from "@/app/book/BookPageClient";
 
 type RawSlot = {
   id: string;
@@ -10,17 +12,12 @@ type RawSlot = {
   listener: { id: string; username: string } | { id: string; username: string }[];
 };
 
-export const dynamic = "force-dynamic";
+export const AVAILABLE_SLOTS_KEY = "slots:available";
 
-export default async function BookPage() {
-  const supabase = createServerClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) {
-    redirect("/signup?redirect=/book");
-  }
-
+async function fetcher(): Promise<Slot[]> {
+  const supabase = createBrowserClient();
   const nowIso = new Date().toISOString();
-  const { data: rows } = await supabase
+  const { data } = await supabase
     .from("time_slots")
     .select(
       "id, start_time, end_time, listener_id, listener:profiles!time_slots_listener_id_fkey(id, username)"
@@ -29,7 +26,7 @@ export default async function BookPage() {
     .gt("start_time", nowIso)
     .order("start_time", { ascending: true });
 
-  const slots: Slot[] = ((rows ?? []) as RawSlot[]).map((r) => {
+  return ((data ?? []) as RawSlot[]).map((r) => {
     const listener = Array.isArray(r.listener) ? r.listener[0] : r.listener;
     return {
       id: r.id,
@@ -38,6 +35,8 @@ export default async function BookPage() {
       listener: { id: listener.id, username: listener.username },
     };
   });
+}
 
-  return <BookPageClient initialSlots={slots} />;
+export function useAvailableSlots(fallbackData: Slot[]) {
+  return useSWR(AVAILABLE_SLOTS_KEY, fetcher, { fallbackData });
 }

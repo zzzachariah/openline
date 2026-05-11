@@ -17,6 +17,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { motion } from "framer-motion";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { formatTime } from "@/lib/format";
+import ChatRoomSkeleton from "./ChatRoomSkeleton";
 
 type Message = {
   id: string;
@@ -333,11 +334,7 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
   const messageGroups = useMemo(() => groupMessages(messages), [messages]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-muted">
-        载入中...
-      </div>
-    );
+    return <ChatRoomSkeleton />;
   }
   if (forbidden) {
     return (
