@@ -14,6 +14,7 @@ import {
   BookmarkCheck,
 } from "lucide-react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { motion } from "framer-motion";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { formatTime } from "@/lib/format";
 
@@ -568,7 +569,12 @@ function MessageBubble({ message, mine }: { message: Message; mine: boolean }) {
   }
 
   return (
-    <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+    <motion.div
+      initial={{ opacity: 0, y: 6, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.22, ease: [0.215, 0.61, 0.355, 1] }}
+      className={`flex ${mine ? "justify-end" : "justify-start"}`}
+    >
       <div className="flex flex-col max-w-[70%]">
         <div
           className={`rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap break-words ${

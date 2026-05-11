@@ -282,27 +282,15 @@ export default function MePage() {
                             now={now}
                             role="user"
                             onCancel={() => cancelBooking(b.id)}
+                            onToggleSaved={() => toggleSaved(b.id)}
+                            saveBusy={saveBusyId === b.id}
                           />
                         </motion.div>
                       ))}
                     </motion.div>
                   )}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {filtered.map((b) => (
-                    <BookingCard
-                      key={b.id}
-                      booking={b}
-                      now={now}
-                      role="user"
-                      onCancel={() => cancelBooking(b.id)}
-                      onToggleSaved={() => toggleSaved(b.id)}
-                      saveBusy={saveBusyId === b.id}
-                    />
-                  ))}
-                </div>
-              )}
+                </motion.div>
+              </AnimatePresence>
 
               <div className="mt-16 text-center">
                 <button
