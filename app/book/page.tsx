@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
+import ListenerReviewsModal from "@/components/ListenerReviewsModal";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { formatDayHeader, formatDayKey, formatTimeRange } from "@/lib/format";
 
@@ -205,7 +205,7 @@ export default function BookPage() {
 
           {loading ? (
             <div className="text-muted text-center py-12">载入中...</div>
-          ) : slots.length === 0 ? (
+          ) : grouped.length === 0 ? (
             <div className="card text-center text-muted">
               <p>暂时没有可预约的时段。请稍后再来看看。</p>
             </div>
@@ -414,6 +414,32 @@ function Row({ label, value }: { label: string; value: string }) {
     <div className="flex items-start justify-between gap-4">
       <span className="text-muted shrink-0">{label}</span>
       <span className="text-right">{value}</span>
+    </div>
+  );
+}
+
+function FormatRow({
+  format,
+  setFormat,
+}: {
+  format: "text" | "voice";
+  setFormat: (f: "text" | "voice") => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <span className="text-muted shrink-0 text-[14px]">形式</span>
+      <div className="flex gap-2">
+        <FormatPill
+          label="文字聊天"
+          selected={format === "text"}
+          onClick={() => setFormat("text")}
+        />
+        <FormatPill
+          label="语音"
+          selected={format === "voice"}
+          onClick={() => setFormat("voice")}
+        />
+      </div>
     </div>
   );
 }

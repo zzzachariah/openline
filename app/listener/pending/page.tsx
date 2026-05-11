@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Copy, Check } from "lucide-react";
 import Logo from "@/components/Logo";
 import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
 import { createBrowserClient } from "@/lib/supabase/client";
 
 export default function ListenerPendingPage() {
@@ -19,26 +18,30 @@ export default function ListenerPendingPage() {
     async function load() {
       const supabase = createBrowserClient();
       const { data: auth } = await supabase.auth.getUser();
+      if (cancelled) return;
       if (!auth.user) {
-        router.push("/login?redirect=/listener/pending");
+        router.replace("/login?redirect=/listener/pending");
         return;
       }
       const { data: profile } = await supabase
         .from("profiles")
         .select("username, is_listener, listener_application_at")
         .eq("id", auth.user.id)
-        .single();
-      if (!profile) return;
+        .maybeSingle();
       if (cancelled) return;
+      if (!profile) {
+        router.replace("/login?redirect=/listener/pending");
+        return;
+      }
 
       // Already approved — go to the listener dashboard.
       if (profile.is_listener) {
-        router.push("/listener");
+        router.replace("/listener");
         return;
       }
       // Never applied — they're a regular user.
       if (!profile.listener_application_at) {
-        router.push("/me");
+        router.replace("/me");
         return;
       }
       setUsername(profile.username);
@@ -64,14 +67,13 @@ export default function ListenerPendingPage() {
   async function logout() {
     const supabase = createBrowserClient();
     await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+    window.location.assign("/");
   }
 
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
+      <main className="pt-24 pb-16">
         <div className="max-w-[440px] mx-auto px-6">
           <div className="flex justify-center mb-8">
             <Logo size={40} className="text-accent" />
@@ -120,7 +122,6 @@ export default function ListenerPendingPage() {
           )}
         </div>
       </main>
-      <Footer />
     </>
   );
 }
