@@ -7,7 +7,7 @@ export default function Footer() {
   const { theme, toggle } = useTheme();
   return (
     <footer className="w-full border-t border-border mt-24">
-      <div className="max-w-6xl mx-auto px-6 py-10 flex items-center justify-between text-caption text-muted">
+      <div className="max-w-5xl mx-auto px-6 py-10 flex items-center justify-between text-caption text-muted">
         <span>© 2026 OpenLine</span>
         <button
           onClick={toggle}
