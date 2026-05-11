@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { formatDate, formatTimeRange, formatCountdown } from "@/lib/format";
 
 export type BookingCardData = {
@@ -32,9 +33,13 @@ export default function BookingCard({ booking, now, role, onCancel }: Props) {
   const chatUrl = role === "user" ? `/chat/${booking.id}` : `/listener/chat/${booking.id}`;
 
   return (
-    <div className="card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <motion.div
+      whileHover={{ y: -2 }}
+      transition={{ type: "spring", stiffness: 320, damping: 28 }}
+      className="card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 hover:border-accent/40 transition-colors"
+    >
       <div className="space-y-1.5 flex-1 min-w-0">
-        <div className="text-[15px] font-medium">
+        <div className="text-[15px] font-medium tabular-nums">
           {formatDate(start)} {formatTimeRange(start, end)}
         </div>
         <div className="text-caption text-muted">
@@ -51,9 +56,17 @@ export default function BookingCard({ booking, now, role, onCancel }: Props) {
               ? "已完成"
               : "已取消"}
           </span>
+          {booking.status === "upcoming" && inWindow && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[12px] bg-accent text-white">
+              <span className="w-1.5 h-1.5 rounded-full bg-white live-pulse" />
+              进行中
+            </span>
+          )}
         </div>
         {booking.status === "upcoming" && !inWindow && (
-          <div className="text-caption text-muted pt-1">{formatCountdown(startTs - now)}</div>
+          <div className="text-caption text-muted pt-1 tabular-nums">
+            {formatCountdown(startTs - now)}
+          </div>
         )}
       </div>
       <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">
@@ -76,6 +89,6 @@ export default function BookingCard({ booking, now, role, onCancel }: Props) {
           </button>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
