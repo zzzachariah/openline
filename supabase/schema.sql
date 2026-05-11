@@ -47,11 +47,14 @@ create table if not exists public.bookings (
   slot_id       uuid not null references public.time_slots(id) on delete restrict,
   format        booking_format not null default 'text',
   status        booking_status not null default 'upcoming',
+  is_saved      boolean not null default false,
   created_at    timestamptz not null default now()
 );
 
 create index if not exists bookings_user_idx     on public.bookings(user_id);
 create index if not exists bookings_listener_idx on public.bookings(listener_id);
+create index if not exists bookings_is_saved_idx on public.bookings(is_saved)
+  where is_saved = true;
 
 -- Prevent two active bookings on the same slot.
 -- Cancelled bookings are excluded so a slot can be re-booked after a cancellation.
@@ -348,15 +351,41 @@ create index if not exists profiles_pending_listener_idx
   on public.profiles(listener_application_at)
   where listener_application_at is not null and is_listener = false;
 
+-- Prevent a single listener from publishing two slots whose times overlap.
+-- Different listeners are allowed to publish slots at the same time — that is
+-- the supported "multiple listeners on the same slot" scenario.
+create extension if not exists btree_gist;
+
+alter table public.time_slots
+  drop constraint if exists time_slots_no_listener_overlap;
+
+alter table public.time_slots
+  add constraint time_slots_no_listener_overlap
+  exclude using gist (
+    listener_id with =,
+    tstzrange(start_time, end_time, '[)') with &&
+  );
+
 -- =====================================================================
 -- Optional: 7-day message auto-deletion (requires pg_cron extension)
 -- =====================================================================
--- Run separately if you want auto-deletion. Uncomment after enabling pg_cron.
+-- The privacy promise on the homepage is: messages are deleted after 7 days
+-- unless the user (倾诉者) marks the chat as saved. The booking row itself
+-- (the "倾听记录") is kept either way.
+--
+-- Uncomment after enabling pg_cron, then run these in the SQL Editor.
 --
 -- create extension if not exists pg_cron;
 --
 -- select cron.schedule(
 --   'delete-old-messages',
 --   '0 3 * * *',
---   $$ delete from public.messages where created_at < now() - interval '7 days' $$
+--   $$
+--     delete from public.messages m
+--      where m.created_at < now() - interval '7 days'
+--        and not exists (
+--          select 1 from public.bookings b
+--           where b.id = m.booking_id and b.is_saved = true
+--        )
+--   $$
 -- );

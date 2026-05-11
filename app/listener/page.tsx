@@ -20,6 +20,7 @@ type RawBooking = {
   id: string;
   format: "text" | "voice";
   status: "upcoming" | "completed" | "cancelled";
+  is_saved: boolean | null;
   user: { username: string } | { username: string }[];
   slot: { start_time: string; end_time: string } | { start_time: string; end_time: string }[];
 };
@@ -45,46 +46,25 @@ export default function ListenerPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 30000);
-    return () => clearInterval(t);
-  }, []);
+  const userId = auth.user.id;
+  const nowIso = new Date().toISOString();
 
-  async function reload() {
-    const supabase = createBrowserClient();
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) {
-      router.push("/login?redirect=/listener");
-      return;
-    }
-    const { data: profile } = await supabase
+  const [{ data: profile }, { data: slotRows }, { data: bookingRows }] = await Promise.all([
+    supabase
       .from("profiles")
       .select("username, is_listener, listener_application_at")
-      .eq("id", auth.user.id)
-      .single();
-    if (!profile?.is_listener) {
-      if (profile?.listener_application_at) {
-        router.push("/listener/pending");
-      } else {
-        router.push("/me");
-      }
-      return;
-    }
-    setUsername(profile.username);
-
-    const nowIso = new Date().toISOString();
-    const { data: slotRows } = await supabase
+      .eq("id", userId)
+      .single(),
+    supabase
       .from("time_slots")
       .select("id, start_time, end_time, is_booked")
-      .eq("listener_id", auth.user.id)
+      .eq("listener_id", userId)
       .gte("end_time", nowIso)
-      .order("start_time", { ascending: true });
-    setSlots(slotRows || []);
-
-    const { data: bookingRows } = await supabase
+      .order("start_time", { ascending: true }),
+    supabase
       .from("bookings")
       .select(
-        "id, format, status, user:profiles!bookings_user_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
+        "id, format, status, is_saved, user:profiles!bookings_user_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
       )
       .eq("listener_id", auth.user.id)
       .order("created_at", { ascending: false });
@@ -163,133 +143,35 @@ export default function ListenerPage() {
       </main>
       <Footer />
 
-      {showAdd && (
-        <AddSlotModal
-          onClose={() => setShowAdd(false)}
-          onSuccess={() => {
-            setShowAdd(false);
-            reload();
-          }}
-        />
-      )}
-    </>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-4 py-2 text-[14px] -mb-px border-b-2 transition-colors ${
-        active
-          ? "border-accent text-foreground"
-          : "border-transparent text-muted hover:text-foreground"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function SlotsSection({
-  slots,
-  onAdd,
-  onDelete,
-}: {
-  slots: Slot[];
-  onAdd: () => void;
-  onDelete: (id: string) => void;
-}) {
-  const grouped: Record<string, { header: string; slots: Slot[] }> = {};
-  for (const s of slots) {
-    const d = new Date(s.start_time);
-    const key = formatDayKey(d);
-    if (!grouped[key]) grouped[key] = { header: formatDayHeader(d), slots: [] };
-    grouped[key].slots.push(s);
+  if (!profile?.is_listener) {
+    if (profile?.listener_application_at) {
+      redirect("/listener/pending");
+    }
+    redirect("/me");
   }
-  const groups = Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+
+  const slots: Slot[] = (slotRows ?? []) as Slot[];
+  const bookings: BookingCardData[] = ((bookingRows ?? []) as RawBooking[]).map((r) => {
+    const user = Array.isArray(r.user) ? r.user[0] : r.user;
+    const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
+    return {
+      id: r.id,
+      format: r.format,
+      status: r.status,
+      counterpartyUsername: user.username,
+      startTime: slot.start_time,
+      endTime: slot.end_time,
+      isSaved: !!r.is_saved,
+    };
+  });
 
   return (
-    <>
-      <div className="flex justify-between items-center mb-6">
-        <p className="text-caption text-muted">未来的可用时段</p>
-        <button onClick={onAdd} className="btn-primary inline-flex items-center gap-1.5 py-2 px-4 text-[14px]">
-          <Plus size={14} />
-          添加时段
-        </button>
-      </div>
-      {groups.length === 0 ? (
-        <div className="card text-center text-muted">
-          <p>还没有时段。点击&ldquo;添加时段&rdquo;开始。</p>
-        </div>
-      ) : (
-        <div className="space-y-8">
-          {groups.map(([key, group]) => (
-            <div key={key}>
-              <h2 className="text-[14px] text-muted mb-3 px-1">{group.header}</h2>
-              <div className="space-y-2">
-                {group.slots.map((s) => (
-                  <div
-                    key={s.id}
-                    className="card flex items-center justify-between gap-4"
-                  >
-                    <div>
-                      <div className="text-[15px] font-medium">
-                        {formatTimeRange(new Date(s.start_time), new Date(s.end_time))}
-                      </div>
-                      <div className="text-caption text-muted mt-0.5">
-                        {s.is_booked ? "已被预约" : "可预约"}
-                      </div>
-                    </div>
-                    {!s.is_booked && (
-                      <button
-                        onClick={() => onDelete(s.id)}
-                        className="text-[13px] text-muted hover:text-danger transition-colors"
-                      >
-                        删除
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </>
-  );
-}
-
-function BookingsSection({
-  bookings,
-  now,
-  onCancel,
-}: {
-  bookings: BookingCardData[];
-  now: number;
-  onCancel: () => void;
-}) {
-  if (bookings.length === 0) {
-    return (
-      <div className="card text-center text-muted">
-        <p>还没有预约。</p>
-      </div>
-    );
-  }
-  return (
-    <div className="space-y-3">
-      {bookings.map((b) => (
-        <BookingCard key={b.id} booking={b} now={now} role="listener" onCancel={onCancel} />
-      ))}
-    </div>
+    <ListenerPageClient
+      userId={userId}
+      username={profile.username}
+      initialSlots={slots}
+      initialBookings={bookings}
+    />
   );
 }
 
@@ -512,6 +394,22 @@ function AddSlotModal({
       return;
     }
 
+    // Pre-check: this listener cannot have a slot that overlaps an existing one.
+    // The DB also enforces this via an exclusion constraint, so this is just to
+    // surface a friendlier error before round-tripping.
+    const { data: overlapping } = await supabase
+      .from("time_slots")
+      .select("id")
+      .eq("listener_id", auth.user.id)
+      .lt("start_time", end.toISOString())
+      .gt("end_time", start.toISOString())
+      .limit(1);
+    if (overlapping && overlapping.length > 0) {
+      setError("这个时段和你已有的时段重叠了");
+      setSubmitting(false);
+      return;
+    }
+
     const { error: insertErr } = await supabase.from("time_slots").insert({
       listener_id: auth.user.id,
       start_time: start.toISOString(),
@@ -519,7 +417,12 @@ function AddSlotModal({
       is_booked: false,
     });
     if (insertErr) {
-      setError("创建失败，请稍后再试");
+      // 23P01 = exclusion_violation (overlap caught by the DB constraint)
+      if (insertErr.code === "23P01") {
+        setError("这个时段和你已有的时段重叠了");
+      } else {
+        setError("创建失败，请稍后再试");
+      }
       setSubmitting(false);
       return;
     }

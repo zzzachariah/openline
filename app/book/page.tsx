@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { X } from "lucide-react";
+import { Shuffle, Sparkles, X } from "lucide-react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import ListenerReviewsModal from "@/components/ListenerReviewsModal";
@@ -24,11 +24,25 @@ type RawSlot = {
   listener: { id: string; username: string } | { id: string; username: string }[];
 };
 
+type TimeGroup = {
+  key: string;
+  startTime: string;
+  endTime: string;
+  slots: Slot[];
+};
+
+type DayGroup = {
+  key: string;
+  header: string;
+  timeGroups: TimeGroup[];
+};
+
 export default function BookPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [authChecked, setAuthChecked] = useState(false);
+  // Single-listener flow: jump straight to confirmation.
   const [selected, setSelected] = useState<Slot | null>(null);
   const [reviewsFor, setReviewsFor] = useState<{ id: string; username: string } | null>(null);
   const [format, setFormat] = useState<"text" | "voice">("text");
@@ -76,21 +90,53 @@ export default function BookPage() {
     };
   }, [router]);
 
-  const grouped = useMemo(() => {
-    const groups: Record<string, { header: string; slots: Slot[] }> = {};
+  const grouped = useMemo<DayGroup[]>(() => {
+    const days: Record<string, { header: string; timeGroups: Record<string, TimeGroup> }> = {};
     for (const s of slots) {
       const d = new Date(s.start_time);
-      const key = formatDayKey(d);
-      if (!groups[key]) {
-        groups[key] = { header: formatDayHeader(d), slots: [] };
+      const dayKey = formatDayKey(d);
+      if (!days[dayKey]) {
+        days[dayKey] = { header: formatDayHeader(d), timeGroups: {} };
       }
-      groups[key].slots.push(s);
+      const timeKey = `${s.start_time}|${s.end_time}`;
+      if (!days[dayKey].timeGroups[timeKey]) {
+        days[dayKey].timeGroups[timeKey] = {
+          key: timeKey,
+          startTime: s.start_time,
+          endTime: s.end_time,
+          slots: [],
+        };
+      }
+      days[dayKey].timeGroups[timeKey].slots.push(s);
     }
-    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+    return Object.entries(days)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dayKey, day]) => ({
+        key: dayKey,
+        header: day.header,
+        timeGroups: Object.values(day.timeGroups).sort((a, b) =>
+          a.startTime.localeCompare(b.startTime)
+        ),
+      }));
   }, [slots]);
 
-  async function confirmBooking() {
-    if (!selected) return;
+  function openGroup(group: TimeGroup) {
+    setError(null);
+    setFormat("text");
+    if (group.slots.length === 1) {
+      setSelected(group.slots[0]);
+    } else {
+      setRouletteGroup(group);
+    }
+  }
+
+  function closeAll() {
+    setSelected(null);
+    setRouletteGroup(null);
+    setError(null);
+  }
+
+  async function confirmBooking(slotToBook: Slot) {
     setSubmitting(true);
     setError(null);
 
@@ -101,23 +147,46 @@ export default function BookPage() {
       return;
     }
 
+    // Don't let the same user hold two upcoming bookings whose time windows
+    // overlap — they can only be in one room at a time.
+    const { data: userBookings } = await supabase
+      .from("bookings")
+      .select(
+        "id, status, slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
+      )
+      .eq("user_id", auth.user.id)
+      .eq("status", "upcoming");
+    const newStart = new Date(slotToBook.start_time).getTime();
+    const newEnd = new Date(slotToBook.end_time).getTime();
+    const overlaps = (userBookings || []).some((b) => {
+      const slot = Array.isArray(b.slot) ? b.slot[0] : b.slot;
+      if (!slot) return false;
+      const s = new Date(slot.start_time).getTime();
+      const e = new Date(slot.end_time).getTime();
+      return s < newEnd && e > newStart;
+    });
+    if (overlaps) {
+      setError("你在这个时段已经有一个预约了");
+      setSubmitting(false);
+      return;
+    }
+
     const { data: slotCheck } = await supabase
       .from("time_slots")
       .select("is_booked")
-      .eq("id", selected.id)
+      .eq("id", slotToBook.id)
       .single();
     if (!slotCheck || slotCheck.is_booked) {
       setError("这个时段刚被预约了，请选择其他时段");
       setSubmitting(false);
-      setSelected(null);
-      setSlots((prev) => prev.filter((s) => s.id !== selected.id));
+      setSlots((prev) => prev.filter((x) => x.id !== slotToBook.id));
       return;
     }
 
     const { error: insertErr } = await supabase.from("bookings").insert({
       user_id: auth.user.id,
-      listener_id: selected.listener.id,
-      slot_id: selected.id,
+      listener_id: slotToBook.listener.id,
+      slot_id: slotToBook.id,
       format,
       status: "upcoming",
     });
@@ -127,7 +196,7 @@ export default function BookPage() {
       return;
     }
 
-    await supabase.from("time_slots").update({ is_booked: true }).eq("id", selected.id);
+    await supabase.from("time_slots").update({ is_booked: true }).eq("id", slotToBook.id);
     router.push("/me");
   }
 
@@ -154,7 +223,7 @@ export default function BookPage() {
 
           {loading ? (
             <div className="text-muted text-center py-12">载入中...</div>
-          ) : slots.length === 0 ? (
+          ) : grouped.length === 0 ? (
             <div className="card text-center text-muted">
               <p>暂时没有可预约的时段。请稍后再来看看。</p>
             </div>
@@ -288,23 +357,162 @@ export default function BookPage() {
                 </div>
               </div>
             </div>
+          </div>
+          <span className="text-caption text-accent shrink-0">抽取 →</span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function ConfirmModal({
+  slot,
+  format,
+  setFormat,
+  submitting,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  slot: Slot;
+  format: "text" | "voice";
+  setFormat: (f: "text" | "voice") => void;
+  submitting: boolean;
+  error: string | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/30" onClick={() => !submitting && onClose()} />
+      <div className="relative bg-surface border border-border rounded-xl p-7 w-full max-w-[440px]">
+        <button
+          onClick={() => !submitting && onClose()}
+          className="absolute top-4 right-4 text-muted hover:text-foreground"
+          aria-label="关闭"
+        >
+          <X size={18} />
+        </button>
+        <h3 className="text-[18px] font-medium mb-5">确认预约？</h3>
+        <div className="space-y-3 text-[14px] mb-6">
+          <Row label="倾听者" value={slot.listener.username} />
+          <Row
+            label="时间"
+            value={`${formatDayHeader(new Date(slot.start_time))} ${formatTimeRange(
+              new Date(slot.start_time),
+              new Date(slot.end_time)
+            )}`}
+          />
+          <FormatRow format={format} setFormat={setFormat} />
+        </div>
+        {format === "voice" && (
+          <p className="text-[13px] text-muted bg-accent-soft border-l-2 border-accent px-3 py-2 mb-5 rounded-r">
+            选择&ldquo;语音&rdquo;后，倾听者会在约定时间发送腾讯会议号给你。
+          </p>
+        )}
+        {error && <div className="text-[13px] text-danger mb-3">{error}</div>}
+        <div className="flex gap-3 justify-end">
+          <button onClick={onClose} disabled={submitting} className="btn-ghost">
+            取消
+          </button>
+          <button onClick={onConfirm} disabled={submitting} className="btn-primary">
+            {submitting ? "预约中..." : "确认预约"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RouletteModal({
+  group,
+  format,
+  setFormat,
+  submitting,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  group: TimeGroup;
+  format: "text" | "voice";
+  setFormat: (f: "text" | "voice") => void;
+  submitting: boolean;
+  error: string | null;
+  onClose: () => void;
+  onConfirm: (winner: Slot) => void;
+}) {
+  const [spinKey, setSpinKey] = useState(0);
+  const [winner, setWinner] = useState<Slot | null>(null);
+
+  function reSpin() {
+    setWinner(null);
+    setSpinKey((k) => k + 1);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/30" onClick={() => !submitting && onClose()} />
+      <div className="relative bg-surface border border-border rounded-xl p-7 w-full max-w-[440px]">
+        <button
+          onClick={() => !submitting && onClose()}
+          className="absolute top-4 right-4 text-muted hover:text-foreground"
+          aria-label="关闭"
+        >
+          <X size={18} />
+        </button>
+
+        <div className="text-center mb-1">
+          <h3 className="text-[18px] font-medium">为你随机匹配一位倾听者</h3>
+          <p className="text-caption text-muted mt-1.5">
+            {formatDayHeader(new Date(group.startTime))} ·{" "}
+            {formatTimeRange(new Date(group.startTime), new Date(group.endTime))}
+          </p>
+        </div>
+
+        <div className="mt-6">
+          <RouletteWheel
+            key={spinKey}
+            candidates={group.slots}
+            onSettled={(w) => setWinner(w)}
+          />
+        </div>
+
+        <div className="mt-5 text-center min-h-[24px]">
+          {winner === null ? (
+            <span className="text-caption text-muted">抽取中…</span>
+          ) : (
+            <span className="text-[14px] inline-flex items-center gap-1.5">
+              <Sparkles size={14} className="text-accent" />
+              为你匹配到 <span className="font-medium">{winner.listener.username}</span>
+            </span>
+          )}
+        </div>
+
+        <div
+          className={`transition-opacity duration-300 ${
+            winner ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
+        >
+          <div className="mt-5 pt-5 border-t border-border">
+            <FormatRow format={format} setFormat={setFormat} />
             {format === "voice" && (
-              <p className="text-[13px] text-muted bg-accent-soft border-l-2 border-accent px-3 py-2 mb-5 rounded-r">
+              <p className="text-[13px] text-muted bg-accent-soft border-l-2 border-accent px-3 py-2 mt-3 rounded-r">
                 选择&ldquo;语音&rdquo;后，倾听者会在约定时间发送腾讯会议号给你。
               </p>
             )}
-            {error && <div className="text-[13px] text-danger mb-3">{error}</div>}
-            <div className="flex gap-3 justify-end">
+            {error && <div className="text-[13px] text-danger mt-3 text-center">{error}</div>}
+            <div className="flex gap-3 justify-end mt-5">
               <button
-                onClick={() => setSelected(null)}
+                onClick={reSpin}
                 disabled={submitting}
-                className="btn-ghost"
+                className="btn-ghost inline-flex items-center gap-1.5"
               >
-                取消
+                <Shuffle size={14} />
+                再抽一次
               </button>
               <button
-                onClick={confirmBooking}
-                disabled={submitting}
+                onClick={() => winner && onConfirm(winner)}
+                disabled={submitting || !winner}
                 className="btn-primary"
               >
                 {submitting ? "预约中..." : "确认预约"}
@@ -312,8 +520,103 @@ export default function BookPage() {
             </div>
           </div>
         </div>
-      )}
-    </>
+      </div>
+    </div>
+  );
+}
+
+const WHEEL_ITEM_H = 56;
+const WHEEL_VISIBLE = 5;
+const WHEEL_REPS = 14;
+const WHEEL_SPIN_MS = 2800;
+
+function RouletteWheel({
+  candidates,
+  onSettled,
+}: {
+  candidates: Slot[];
+  onSettled: (winner: Slot) => void;
+}) {
+  const items = useMemo(() => {
+    const out: Slot[] = [];
+    for (let i = 0; i < WHEEL_REPS; i++) out.push(...candidates);
+    return out;
+  }, [candidates]);
+
+  // Pick the winner once per mount. The parent forces a remount via `key`
+  // when the user re-spins, which resets this state.
+  const [winnerIdx] = useState(() => Math.floor(Math.random() * candidates.length));
+  const [moving, setMoving] = useState(false);
+
+  useEffect(() => {
+    // Start at the initial position, then on the next frame flip `moving` to
+    // engage the CSS transition into the final position.
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setMoving(true));
+    });
+    const settle = setTimeout(() => {
+      onSettled(candidates[winnerIdx]);
+    }, WHEEL_SPIN_MS);
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+      clearTimeout(settle);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const centerOffset = Math.floor(WHEEL_VISIBLE / 2) * WHEEL_ITEM_H;
+  const targetIdx = (WHEEL_REPS - 1) * candidates.length + winnerIdx;
+  const finalTranslate = centerOffset - targetIdx * WHEEL_ITEM_H;
+  const translateY = moving ? finalTranslate : centerOffset;
+
+  return (
+    <div
+      className="relative mx-auto overflow-hidden rounded-xl border border-border bg-background/50"
+      style={{ height: WHEEL_VISIBLE * WHEEL_ITEM_H, maxWidth: 300 }}
+    >
+      {/* Top and bottom fade */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-14 bg-gradient-to-b from-surface to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-14 bg-gradient-to-t from-surface to-transparent" />
+      {/* Center highlight band */}
+      <div
+        className="pointer-events-none absolute inset-x-3 z-10 rounded-md border border-accent/70 bg-accent-soft/40"
+        style={{
+          top: `calc(50% - ${WHEEL_ITEM_H / 2}px)`,
+          height: WHEEL_ITEM_H,
+        }}
+      />
+      {/* Tick marks on the sides */}
+      <div
+        className="pointer-events-none absolute left-0 z-20 h-2 w-2 -translate-y-1/2 rotate-45 border-l border-b border-accent bg-surface"
+        style={{ top: "50%" }}
+      />
+      <div
+        className="pointer-events-none absolute right-0 z-20 h-2 w-2 -translate-y-1/2 -rotate-45 border-r border-b border-accent bg-surface"
+        style={{ top: "50%" }}
+      />
+      {/* The reel */}
+      <div
+        style={{
+          transform: `translateY(${translateY}px)`,
+          transition: moving
+            ? `transform ${WHEEL_SPIN_MS}ms cubic-bezier(0.16, 0.84, 0.28, 1)`
+            : "none",
+          willChange: "transform",
+        }}
+      >
+        {items.map((s, i) => (
+          <div
+            key={i}
+            className="flex items-center justify-center text-[15px] font-medium tracking-tight"
+            style={{ height: WHEEL_ITEM_H }}
+          >
+            {s.listener.username}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -322,6 +625,32 @@ function Row({ label, value }: { label: string; value: string }) {
     <div className="flex items-start justify-between gap-4">
       <span className="text-muted shrink-0">{label}</span>
       <span className="text-right">{value}</span>
+    </div>
+  );
+}
+
+function FormatRow({
+  format,
+  setFormat,
+}: {
+  format: "text" | "voice";
+  setFormat: (f: "text" | "voice") => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <span className="text-muted shrink-0 text-[14px]">形式</span>
+      <div className="flex gap-2">
+        <FormatPill
+          label="文字聊天"
+          selected={format === "text"}
+          onClick={() => setFormat("text")}
+        />
+        <FormatPill
+          label="语音"
+          selected={format === "voice"}
+          onClick={() => setFormat("voice")}
+        />
+      </div>
     </div>
   );
 }

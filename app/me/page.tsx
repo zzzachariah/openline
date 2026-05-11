@@ -128,33 +128,42 @@ export default function MePage() {
     }
   }
 
-  async function logout() {
-    const supabase = createBrowserClient();
-    await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+  const userId = auth.user.id;
+  const [{ data: profile }, { data: rawBookings }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("username, is_listener")
+      .eq("id", userId)
+      .single(),
+    supabase
+      .from("bookings")
+      .select(
+        "id, format, status, is_saved, listener:profiles!bookings_listener_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
+      )
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  if (!profile) {
+    redirect("/login?redirect=/me");
+  }
+  if (profile.is_listener) {
+    redirect("/listener");
   }
 
-  async function cancelBooking(id: string) {
-    if (!confirm("确认取消这次预约？")) return;
-    const supabase = createBrowserClient();
-    const { error } = await supabase
-      .from("bookings")
-      .update({ status: "cancelled" })
-      .eq("id", id);
-    if (error) return;
-    const { data: row } = await supabase
-      .from("bookings")
-      .select("slot_id")
-      .eq("id", id)
-      .single();
-    if (row?.slot_id) {
-      await supabase.from("time_slots").update({ is_booked: false }).eq("id", row.slot_id);
-    }
-    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: "cancelled" } : b)));
-  }
-
-  const filtered = bookings.filter((b) => b.status === tab);
+  const bookings: BookingCardData[] = ((rawBookings ?? []) as RawBooking[]).map((r) => {
+    const listener = Array.isArray(r.listener) ? r.listener[0] : r.listener;
+    const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
+    return {
+      id: r.id,
+      format: r.format,
+      status: r.status,
+      counterpartyUsername: listener.username,
+      startTime: slot.start_time,
+      endTime: slot.end_time,
+      isSaved: !!r.is_saved,
+    };
+  });
 
   return (
     <>
