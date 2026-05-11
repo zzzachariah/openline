@@ -1,12 +1,11 @@
 import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
 import Skeleton, { SkeletonSlotRow } from "@/components/Skeleton";
 
 export default function ListenerLoading() {
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
+      <main className="pt-24 pb-16">
         <div className="max-w-prose mx-auto px-6">
           <div className="mb-10 space-y-2">
             <Skeleton className="h-9 w-40" />
@@ -36,7 +35,6 @@ export default function ListenerLoading() {
           </div>
         </div>
       </main>
-      <Footer />
     </>
   );
 }

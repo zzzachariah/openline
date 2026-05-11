@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Copy, Check } from "lucide-react";
 import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
 import BookingCard, { BookingCardData } from "@/components/BookingCard";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { useUserBookings } from "@/lib/hooks/useUserBookings";
@@ -82,7 +81,7 @@ export default function MePageClient({ userId, username, initialBookings }: Prop
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
+      <main className="pt-24 pb-16">
         <div className="max-w-prose mx-auto px-6">
           <div className="mb-12">
             <h1 className="text-h2 font-medium tracking-tight mb-2 flex items-center gap-3 flex-wrap">
@@ -165,7 +164,6 @@ export default function MePageClient({ userId, username, initialBookings }: Prop
           </div>
         </div>
       </main>
-      <Footer />
     </>
   );
 }

@@ -31,7 +31,7 @@ export default async function MePage() {
     supabase
       .from("bookings")
       .select(
-        "id, format, status, listener:profiles!bookings_listener_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
+        "id, format, status, is_saved, listener:profiles!bookings_listener_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
       )
       .eq("user_id", userId)
       .order("created_at", { ascending: false }),
@@ -54,6 +54,7 @@ export default async function MePage() {
       counterpartyUsername: listener.username,
       startTime: slot.start_time,
       endTime: slot.end_time,
+      isSaved: !!r.is_saved,
     };
   });
 

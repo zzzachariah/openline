@@ -1,12 +1,11 @@
 import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
 import Skeleton, { SkeletonBookingCard } from "@/components/Skeleton";
 
 export default function MeLoading() {
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
+      <main className="pt-24 pb-16">
         <div className="max-w-prose mx-auto px-6">
           <div className="mb-12 space-y-3">
             <Skeleton className="h-9 w-64" />
@@ -26,7 +25,6 @@ export default function MeLoading() {
           </div>
         </div>
       </main>
-      <Footer />
     </>
   );
 }
