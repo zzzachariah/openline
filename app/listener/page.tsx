@@ -7,6 +7,7 @@ type RawBooking = {
   id: string;
   format: "text" | "voice";
   status: "upcoming" | "completed" | "cancelled";
+  is_saved: boolean | null;
   user: { username: string } | { username: string }[];
   slot: { start_time: string; end_time: string } | { start_time: string; end_time: string }[];
 };
@@ -73,4 +74,8 @@ export default async function ListenerPage() {
       initialBookings={bookings}
     />
   );
+}
+
+function pad(n: number) {
+  return n.toString().padStart(2, "0");
 }
