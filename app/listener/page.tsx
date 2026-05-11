@@ -23,11 +23,12 @@ type RawBooking = {
   listener_id: string;
   format: "text" | "voice";
   status: "upcoming" | "completed" | "cancelled";
+  is_saved: boolean | null;
   user: { username: string } | { username: string }[];
   slot: { start_time: string; end_time: string } | { start_time: string; end_time: string }[];
 };
 
-type SectionTab = "slots" | "bookings";
+export const dynamic = "force-dynamic";
 
 export default function ListenerPage() {
   const router = useRouter();
@@ -40,43 +41,27 @@ export default function ListenerPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 30000);
-    return () => clearInterval(t);
-  }, []);
+  const userId = auth.user.id;
+  const nowIso = new Date().toISOString();
 
-  async function reload() {
-    const supabase = createBrowserClient();
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) {
-      router.push("/login?redirect=/listener");
-      return;
-    }
-    const { data: profile } = await supabase
+  const [
+    { data: profile },
+    { data: slotRows },
+    { data: bookingRows },
+    { data: reviewRows },
+  ] = await Promise.all([
+    supabase
       .from("profiles")
       .select("username, is_listener, listener_application_at")
-      .eq("id", auth.user.id)
-      .single();
-    if (!profile?.is_listener) {
-      if (profile?.listener_application_at) {
-        router.push("/listener/pending");
-      } else {
-        router.push("/me");
-      }
-      return;
-    }
-    setUsername(profile.username);
-
-    const nowIso = new Date().toISOString();
-    const { data: slotRows } = await supabase
+      .eq("id", userId)
+      .single(),
+    supabase
       .from("time_slots")
       .select("id, start_time, end_time, is_booked")
-      .eq("listener_id", auth.user.id)
+      .eq("listener_id", userId)
       .gte("end_time", nowIso)
-      .order("start_time", { ascending: true });
-    setSlots(slotRows || []);
-
-    const { data: bookingRows } = await supabase
+      .order("start_time", { ascending: true }),
+    supabase
       .from("bookings")
       .select(
         "id, user_id, listener_id, format, status, user:profiles!bookings_user_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
@@ -384,57 +369,32 @@ function AddSlotModal({
       setSubmitting(false);
       return;
     }
-    onSuccess();
+    redirect("/me");
   }
 
-  const start = date && time ? new Date(`${date}T${time}:00`) : null;
-  const end = start && !isNaN(start.getTime()) ? new Date(start.getTime() + 40 * 60 * 1000) : null;
+  const slots: Slot[] = (slotRows ?? []) as Slot[];
+  const bookings: BookingCardData[] = ((bookingRows ?? []) as RawBooking[]).map((r) => {
+    const user = Array.isArray(r.user) ? r.user[0] : r.user;
+    const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
+    return {
+      id: r.id,
+      format: r.format,
+      status: r.status,
+      counterpartyUsername: user.username,
+      startTime: slot.start_time,
+      endTime: slot.end_time,
+      isSaved: !!r.is_saved,
+    };
+  });
+  const reviews: ReceivedReview[] = (reviewRows ?? []) as ReceivedReview[];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-      <div className="absolute inset-0 bg-black/30" onClick={() => !submitting && onClose()} />
-      <div className="relative bg-surface border border-border rounded-xl p-7 w-full max-w-[440px]">
-        <button
-          onClick={() => !submitting && onClose()}
-          className="absolute top-4 right-4 text-muted hover:text-foreground"
-          aria-label="关闭"
-        >
-          <X size={18} />
-        </button>
-        <h3 className="text-[18px] font-medium mb-5">添加时段</h3>
-        <div className="space-y-4">
-          <label className="block">
-            <span className="text-caption text-muted block mb-1.5">日期</span>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="input"
-            />
-          </label>
-          <label className="block">
-            <span className="text-caption text-muted block mb-1.5">开始时间</span>
-            <input
-              type="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              className="input"
-            />
-          </label>
-          <div className="text-caption text-muted">
-            时长 40 分钟{end ? `（${formatTime(start!)} — ${formatTime(end)}）` : ""}
-          </div>
-        </div>
-        {error && <div className="text-[13px] text-danger mt-3">{error}</div>}
-        <div className="flex gap-3 justify-end mt-6">
-          <button onClick={onClose} disabled={submitting} className="btn-ghost">
-            取消
-          </button>
-          <button onClick={submit} disabled={submitting} className="btn-primary">
-            {submitting ? "创建中..." : "创建时段"}
-          </button>
-        </div>
-      </div>
-    </div>
+    <ListenerPageClient
+      userId={userId}
+      username={profile.username}
+      initialSlots={slots}
+      initialBookings={bookings}
+      initialReviews={reviews}
+    />
   );
 }

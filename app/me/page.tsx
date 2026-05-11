@@ -18,6 +18,8 @@ type RawBooking = {
   listener_id: string;
   format: "text" | "voice";
   status: "upcoming" | "completed" | "cancelled";
+  is_saved: boolean | null;
+  listener_id: string;
   listener: { username: string } | { username: string }[];
   slot: { start_time: string; end_time: string } | { start_time: string; end_time: string }[];
 };
@@ -130,90 +132,54 @@ export default function MePage() {
     }
   }
 
-  async function logout() {
-    const supabase = createBrowserClient();
-    await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+export default async function MePage() {
+  const supabase = createServerClient();
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) {
+    redirect("/login?redirect=/me");
   }
 
-  async function cancelBooking(id: string) {
-    if (!confirm("确认取消这次预约？")) return;
-    const supabase = createBrowserClient();
-    const { error } = await supabase
+  const userId = auth.user.id;
+  const [{ data: profile }, { data: rawBookings }, { data: rawReviews }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("username, is_listener")
+      .eq("id", userId)
+      .single(),
+    supabase
       .from("bookings")
-      .update({ status: "cancelled" })
-      .eq("id", id);
-    if (error) return;
-    const { data: row } = await supabase
-      .from("bookings")
-      .select("slot_id")
-      .eq("id", id)
-      .single();
-    if (row?.slot_id) {
-      await supabase.from("time_slots").update({ is_booked: false }).eq("id", row.slot_id);
-    }
-    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: "cancelled" } : b)));
+      .select(
+        "id, format, status, is_saved, listener_id, listener:profiles!bookings_listener_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
+      )
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("reviews")
+      .select("id, booking_id, comment, listener_reply, created_at, replied_at")
+      .eq("user_id", userId),
+  ]);
+
+  if (!profile) {
+    redirect("/login?redirect=/me");
+  }
+  if (profile.is_listener) {
+    redirect("/listener");
   }
 
-  const filtered = bookings.filter((b) => b.status === tab);
-
-  return (
-    <>
-      <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
-        <div className="max-w-prose mx-auto px-6">
-          {loading ? (
-            <div className="text-muted text-center py-12">载入中...</div>
-          ) : (
-            <>
-              <div className="mb-12">
-                <h1 className="text-h2 font-medium tracking-tight mb-2 flex items-center gap-3 flex-wrap">
-                  你好，{username}
-                  <button
-                    onClick={copyUsername}
-                    className="inline-flex items-center gap-1 text-[13px] text-muted hover:text-accent transition-colors px-2 py-1 rounded-md border border-border"
-                    aria-label="复制用户名"
-                  >
-                    {copied ? (
-                      <>
-                        <Check size={12} />
-                        已复制
-                      </>
-                    ) : (
-                      <>
-                        <Copy size={12} />
-                        复制用户名
-                      </>
-                    )}
-                  </button>
-                </h1>
-                <p className="text-caption text-muted">
-                  记得保存这个用户名——换设备登录时需要它。
-                </p>
-              </div>
-
-              <div className="flex gap-1 mb-6 border-b border-border">
-                {(
-                  [
-                    { key: "upcoming", label: "即将开始" },
-                    { key: "completed", label: "已完成" },
-                    { key: "cancelled", label: "已取消" },
-                  ] as { key: Tab; label: string }[]
-                ).map((t) => (
-                  <button
-                    key={t.key}
-                    onClick={() => setTab(t.key)}
-                    className={`px-4 py-2 text-[14px] -mb-px border-b-2 transition-colors ${
-                      tab === t.key
-                        ? "border-accent text-foreground"
-                        : "border-transparent text-muted hover:text-foreground"
-                    }`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
+  const bookings: BookingWithListener[] = ((rawBookings ?? []) as RawBooking[]).map((r) => {
+    const listener = Array.isArray(r.listener) ? r.listener[0] : r.listener;
+    const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
+    const card: BookingCardData = {
+      id: r.id,
+      format: r.format,
+      status: r.status,
+      counterpartyUsername: listener.username,
+      startTime: slot.start_time,
+      endTime: slot.end_time,
+      isSaved: !!r.is_saved,
+    };
+    return { ...card, listenerId: r.listener_id };
+  });
 
               {filtered.length === 0 ? (
                 <div className="card text-center text-muted">
@@ -256,19 +222,12 @@ export default function MePage() {
                 </div>
               )}
 
-              <div className="mt-16 text-center">
-                <button
-                  onClick={logout}
-                  className="text-caption text-muted hover:text-foreground transition-colors"
-                >
-                  退出登录
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </main>
-      <Footer />
-    </>
+  return (
+    <MePageClient
+      userId={userId}
+      username={profile.username}
+      initialBookings={bookings}
+      initialReviews={reviews}
+    />
   );
 }
