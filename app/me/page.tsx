@@ -16,6 +16,7 @@ type RawBooking = {
   id: string;
   format: "text" | "voice";
   status: "upcoming" | "completed" | "cancelled";
+  is_saved: boolean | null;
   listener: { username: string } | { username: string }[];
   slot: { start_time: string; end_time: string } | { start_time: string; end_time: string }[];
 };
@@ -28,6 +29,7 @@ export default function MePage() {
   const [tab, setTab] = useState<Tab>("upcoming");
   const [copied, setCopied] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [saveBusyId, setSaveBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30000);
@@ -68,7 +70,7 @@ export default function MePage() {
       const { data: rows } = await supabase
         .from("bookings")
         .select(
-          "id, format, status, listener:profiles!bookings_listener_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
+          "id, format, status, is_saved, listener:profiles!bookings_listener_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
         )
         .eq("user_id", auth.user.id)
         .order("created_at", { ascending: false });
@@ -85,6 +87,7 @@ export default function MePage() {
             counterpartyUsername: listener.username,
             startTime: slot.start_time,
             endTime: slot.end_time,
+            isSaved: !!r.is_saved,
           };
         });
         setBookings(mapped);
@@ -131,6 +134,27 @@ export default function MePage() {
       await supabase.from("time_slots").update({ is_booked: false }).eq("id", row.slot_id);
     }
     setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: "cancelled" } : b)));
+  }
+
+  async function toggleSaved(id: string) {
+    const current = bookings.find((b) => b.id === id);
+    if (!current || saveBusyId) return;
+    const next = !current.isSaved;
+    setSaveBusyId(id);
+    // Optimistic flip
+    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, isSaved: next } : b)));
+    const supabase = createBrowserClient();
+    const { error } = await supabase
+      .from("bookings")
+      .update({ is_saved: next })
+      .eq("id", id);
+    setSaveBusyId(null);
+    if (error) {
+      // Roll back
+      setBookings((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, isSaved: !next } : b))
+      );
+    }
   }
 
   const filtered = bookings.filter((b) => b.status === tab);
@@ -263,8 +287,22 @@ export default function MePage() {
                       ))}
                     </motion.div>
                   )}
-                </motion.div>
-              </AnimatePresence>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filtered.map((b) => (
+                    <BookingCard
+                      key={b.id}
+                      booking={b}
+                      now={now}
+                      role="user"
+                      onCancel={() => cancelBooking(b.id)}
+                      onToggleSaved={() => toggleSaved(b.id)}
+                      saveBusy={saveBusyId === b.id}
+                    />
+                  ))}
+                </div>
+              )}
 
               <div className="mt-16 text-center">
                 <button

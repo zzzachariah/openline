@@ -26,11 +26,9 @@ type RawBooking = {
   id: string;
   format: "text" | "voice";
   status: "upcoming" | "completed" | "cancelled";
-  user: { username: string } | { username: string }[] | null;
-  slot:
-    | { start_time: string; end_time: string }
-    | { start_time: string; end_time: string }[]
-    | null;
+  is_saved: boolean | null;
+  user: { username: string } | { username: string }[];
+  slot: { start_time: string; end_time: string } | { start_time: string; end_time: string }[];
 };
 
 type SectionTab = "calendar" | "bookings";
@@ -77,76 +75,40 @@ export default function ListenerPage() {
         router.push("/login?redirect=/listener");
         return;
       }
-      const userId = authRes.data.user.id;
+      return;
+    }
+    setUsername(profile.username);
 
-      const profileRes = await withTimeout(
-        supabase
-          .from("profiles")
-          .select("username, is_listener, listener_application_at")
-          .eq("id", userId)
-          .single(),
-        QUERY_TIMEOUT_MS,
-        "读取账号信息超时，请检查网络后重试"
-      );
-      if (profileRes.error) {
-        throw new Error(`读取账号信息失败：${profileRes.error.message}`);
-      }
-      const profile = profileRes.data;
-      if (!profile?.is_listener) {
-        if (profile?.listener_application_at) {
-          router.push("/listener/pending");
-        } else {
-          router.push("/me");
-        }
-        return;
-      }
-      setUsername(profile.username);
+    const nowIso = new Date().toISOString();
+    const { data: slotRows } = await supabase
+      .from("time_slots")
+      .select("id, start_time, end_time, is_booked")
+      .eq("listener_id", auth.user.id)
+      .gte("end_time", nowIso)
+      .order("start_time", { ascending: true });
+    setSlots(slotRows || []);
 
-      const nowIso = new Date().toISOString();
-      const slotsRes = await withTimeout(
-        supabase
-          .from("time_slots")
-          .select("id, start_time, end_time, is_booked")
-          .eq("listener_id", userId)
-          .gte("end_time", nowIso)
-          .order("start_time", { ascending: true }),
-        QUERY_TIMEOUT_MS,
-        "读取时段超时，请检查网络后重试"
-      );
-      if (slotsRes.error) {
-        throw new Error(`读取时段失败：${slotsRes.error.message}`);
-      }
-      setSlots(slotsRes.data ?? []);
-
-      const bookingsRes = await withTimeout(
-        supabase
-          .from("bookings")
-          .select(
-            "id, format, status, user:profiles!bookings_user_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
-          )
-          .eq("listener_id", userId)
-          .order("created_at", { ascending: false }),
-        QUERY_TIMEOUT_MS,
-        "读取预约超时，请检查网络后重试"
-      );
-      if (bookingsRes.error) {
-        throw new Error(`读取预约失败：${bookingsRes.error.message}`);
-      }
-      const mapped: BookingCardData[] = (bookingsRes.data as RawBooking[] | null ?? [])
-        .map((r) => {
-          const user = Array.isArray(r.user) ? r.user[0] : r.user;
-          const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
-          if (!slot) return null;
-          return {
-            id: r.id,
-            format: r.format,
-            status: r.status,
-            counterpartyUsername: user?.username ?? "匿名",
-            startTime: slot.start_time,
-            endTime: slot.end_time,
-          };
-        })
-        .filter((b): b is BookingCardData => b !== null);
+    const { data: bookingRows } = await supabase
+      .from("bookings")
+      .select(
+        "id, format, status, is_saved, user:profiles!bookings_user_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
+      )
+      .eq("listener_id", auth.user.id)
+      .order("created_at", { ascending: false });
+    if (bookingRows) {
+      const mapped: BookingCardData[] = (bookingRows as RawBooking[]).map((r) => {
+        const user = Array.isArray(r.user) ? r.user[0] : r.user;
+        const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
+        return {
+          id: r.id,
+          format: r.format,
+          status: r.status,
+          counterpartyUsername: user.username,
+          startTime: slot.start_time,
+          endTime: slot.end_time,
+          isSaved: !!r.is_saved,
+        };
+      });
       setBookings(mapped);
     } catch (err) {
       console.error("listener dashboard load failed", err);

@@ -47,11 +47,14 @@ create table if not exists public.bookings (
   slot_id       uuid not null references public.time_slots(id) on delete restrict,
   format        booking_format not null default 'text',
   status        booking_status not null default 'upcoming',
+  is_saved      boolean not null default false,
   created_at    timestamptz not null default now()
 );
 
 create index if not exists bookings_user_idx     on public.bookings(user_id);
 create index if not exists bookings_listener_idx on public.bookings(listener_id);
+create index if not exists bookings_is_saved_idx on public.bookings(is_saved)
+  where is_saved = true;
 
 -- Prevent two active bookings on the same slot.
 -- Cancelled bookings are excluded so a slot can be re-booked after a cancellation.
@@ -107,6 +110,28 @@ drop trigger if exists bookings_increment_counter on public.bookings;
 create trigger bookings_increment_counter
   after insert on public.bookings
   for each row execute function public.increment_booking_counter();
+
+-- Only the user (倾诉者) may toggle is_saved on their booking.
+-- The listener can still update status/format etc., just not flip this flag.
+create or replace function public.guard_booking_is_saved()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.is_saved is distinct from old.is_saved
+     and auth.uid() is distinct from old.user_id then
+    raise exception 'only the booking user can change is_saved';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists bookings_guard_is_saved on public.bookings;
+create trigger bookings_guard_is_saved
+  before update on public.bookings
+  for each row execute function public.guard_booking_is_saved();
 
 -- =====================================================================
 -- Row Level Security
@@ -249,51 +274,33 @@ create index if not exists profiles_pending_listener_idx
   on public.profiles(listener_application_at)
   where listener_application_at is not null and is_listener = false;
 
--- Backfill bookings.listener_id for projects whose bookings table predates this column.
--- Safe to run repeatedly: it only acts when the column is missing or rows are unbackfilled.
--- The UPDATE and SET NOT NULL are wrapped in DO + EXECUTE so the SQL referencing
--- the new column is parsed at runtime (after the ADD COLUMN has executed), which is
--- required for tools like Supabase SQL Editor that prepare a whole script at once.
 alter table public.bookings
-  add column if not exists listener_id uuid
-  references public.profiles(id) on delete cascade;
+  add column if not exists is_saved boolean not null default false;
 
-do $$
-begin
-  if exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public'
-      and table_name = 'time_slots'
-      and column_name = 'listener_id'
-  ) then
-    execute $sql$
-      update public.bookings b
-         set listener_id = ts.listener_id
-        from public.time_slots ts
-       where b.slot_id = ts.id
-         and b.listener_id is null
-    $sql$;
-  end if;
-end $$;
-
-do $$
-begin
-  execute 'alter table public.bookings alter column listener_id set not null';
-exception when others then
-  raise notice 'bookings.listener_id still has NULL rows; skipping SET NOT NULL';
-end $$;
-
-create index if not exists bookings_listener_idx on public.bookings(listener_id);
+create index if not exists bookings_is_saved_idx
+  on public.bookings(is_saved)
+  where is_saved = true;
 
 -- =====================================================================
 -- Optional: 7-day message auto-deletion (requires pg_cron extension)
 -- =====================================================================
--- Run separately if you want auto-deletion. Uncomment after enabling pg_cron.
+-- The privacy promise on the homepage is: messages are deleted after 7 days
+-- unless the user (倾诉者) marks the chat as saved. The booking row itself
+-- (the "倾听记录") is kept either way.
+--
+-- Uncomment after enabling pg_cron, then run these in the SQL Editor.
 --
 -- create extension if not exists pg_cron;
 --
 -- select cron.schedule(
 --   'delete-old-messages',
 --   '0 3 * * *',
---   $$ delete from public.messages where created_at < now() - interval '7 days' $$
+--   $$
+--     delete from public.messages m
+--      where m.created_at < now() - interval '7 days'
+--        and not exists (
+--          select 1 from public.bookings b
+--           where b.id = m.booking_id and b.is_saved = true
+--        )
+--   $$
 -- );

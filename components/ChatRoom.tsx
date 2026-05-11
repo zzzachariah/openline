@@ -3,8 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Send, Copy, Check, ChevronDown } from "lucide-react";
+import {
+  ArrowLeft,
+  Send,
+  Copy,
+  Check,
+  ChevronDown,
+  AlertCircle,
+  Bookmark,
+  BookmarkCheck,
+} from "lucide-react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { formatTime } from "@/lib/format";
 
@@ -15,6 +24,8 @@ type Message = {
   content: string;
   message_type: "text" | "meeting_code" | "system";
   created_at: string;
+  pending?: boolean;
+  failed?: boolean;
 };
 
 type ChatRoomProps = {
@@ -30,7 +41,10 @@ type BookingInfo = {
   end_time: string;
   start_time: string;
   counterparty_username: string;
+  is_saved: boolean;
 };
+
+const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
   const router = useRouter();
@@ -45,9 +59,12 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
   const [meetingCode, setMeetingCode] = useState("");
   const [resourcesOpen, setResourcesOpen] = useState(false);
   const [endingSent, setEndingSent] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [saveBusy, setSaveBusy] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const supabase = useMemo(() => createBrowserClient(), []);
 
   // Tick once per second to drive the timer
   useEffect(() => {
@@ -57,22 +74,47 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
 
   useEffect(() => {
     let cancelled = false;
-    const supabase = createBrowserClient();
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let channel: RealtimeChannel | null = null;
 
-    async function setup() {
-      const { data: auth } = await supabase.auth.getUser();
-      if (cancelled) return;
-      if (!auth.user) {
-        router.push(`/login?redirect=${role === "listener" ? "/listener" : "/me"}`);
+    async function fetchMessages() {
+      const { data: msgs } = await supabase
+        .from("messages")
+        .select("id, booking_id, sender_id, content, message_type, created_at")
+        .eq("booking_id", bookingId)
+        .order("created_at", { ascending: true });
+      if (cancelled || !msgs) return;
+      setMessages((prev) => {
+        // Preserve any still-pending or failed local messages while merging
+        const pendingLocal = prev.filter((m) => m.pending || m.failed);
+        const serverIds = new Set((msgs as Message[]).map((m) => m.id));
+        const keep = pendingLocal.filter((m) => !serverIds.has(m.id));
+        return [...(msgs as Message[]), ...keep];
+      });
+    }
+
+    async function init() {
+      // Resolve auth FIRST so the realtime client has a JWT before .subscribe().
+      // Subscribing before auth resolves means RLS filters out every INSERT event
+      // and the recipient never sees new messages.
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user) {
+        router.push(
+          `/login?redirect=${role === "listener" ? "/listener" : "/me"}`
+        );
         return;
       }
-      setMe(auth.user.id);
+      // Defensive: make sure realtime has the current access token.
+      supabase.realtime.setAuth(session.access_token);
+
+      if (cancelled) return;
+      setMe(session.user.id);
 
       const { data: b } = await supabase
         .from("bookings")
         .select(
-          "id, user_id, listener_id, status, slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
+          "id, user_id, listener_id, status, is_saved, slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
         )
         .eq("id", bookingId)
         .single();
@@ -85,9 +127,11 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
       }
 
       const expectedRole = role === "user" ? b.user_id : b.listener_id;
-      if (expectedRole !== auth.user.id) {
-        setForbidden(true);
-        setLoading(false);
+      if (expectedRole !== session.user.id) {
+        if (!cancelled) {
+          setForbidden(true);
+          setLoading(false);
+        }
         return;
       }
 
@@ -109,20 +153,13 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
         start_time: slotData.start_time,
         end_time: slotData.end_time,
         counterparty_username: cp?.username || "",
+        is_saved: !!b.is_saved,
       });
 
-      const { data: msgs } = await supabase
-        .from("messages")
-        .select("id, booking_id, sender_id, content, message_type, created_at")
-        .eq("booking_id", bookingId)
-        .order("created_at", { ascending: true });
+      await fetchMessages();
       if (cancelled) return;
-      if (msgs) setMessages(msgs as Message[]);
-
       setLoading(false);
 
-      // Subscribe to realtime AFTER auth + initial fetch so the channel
-      // handshakes with the user's JWT and RLS evaluates correctly.
       channel = supabase
         .channel(`messages:${bookingId}`)
         .on(
@@ -134,27 +171,43 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
             filter: `booking_id=eq.${bookingId}`,
           },
           (payload) => {
-            if (cancelled) return;
             const m = payload.new as Message;
             setMessages((prev) => {
               if (prev.some((x) => x.id === m.id)) return prev;
+              // If this insert is an echo of an optimistic placeholder we
+              // already added locally, replace the placeholder in place.
+              const idx = prev.findIndex(
+                (x) =>
+                  x.pending &&
+                  x.sender_id === m.sender_id &&
+                  x.content === m.content
+              );
+              if (idx >= 0) {
+                const next = prev.slice();
+                next[idx] = m;
+                return next;
+              }
               return [...prev, m];
             });
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            // Reconnect → fill any gap that arrived while we were offline.
+            fetchMessages();
+          }
+        });
     }
 
-    setup();
+    init();
 
     return () => {
       cancelled = true;
       if (channel) supabase.removeChannel(channel);
     };
-  }, [bookingId, role, router]);
+  }, [bookingId, role, router, supabase]);
 
   useEffect(() => {
-    // Auto-scroll to bottom when new message arrives
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages.length]);
 
@@ -163,13 +216,14 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
   const remainingMs = booking ? Math.max(0, endTs - now) : 0;
   const sessionStarted = booking ? now >= startTs : false;
   const sessionEnded = booking ? now >= endTs : false;
+  const pastRetention =
+    !!booking && sessionEnded && !booking.is_saved && now - endTs > RETENTION_MS;
 
   // Mark booking completed once it ends
   useEffect(() => {
     if (!booking || endingSent) return;
     if (sessionEnded && booking.status === "upcoming") {
       setEndingSent(true);
-      const supabase = createBrowserClient();
       supabase
         .from("bookings")
         .update({ status: "completed" })
@@ -178,7 +232,7 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
           setBooking((b) => (b ? { ...b, status: "completed" } : b));
         });
     }
-  }, [sessionEnded, booking, endingSent]);
+  }, [sessionEnded, booking, endingSent, supabase]);
 
   async function sendMessage(content: string, type: "text" | "meeting_code") {
     if (!me || !booking) return;
@@ -187,7 +241,19 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
     if (trimmed.length > 1000) return;
     if (sessionEnded) return;
 
-    const supabase = createBrowserClient();
+    setSendError(null);
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const optimistic: Message = {
+      id: tempId,
+      booking_id: booking.id,
+      sender_id: me,
+      content: trimmed,
+      message_type: type,
+      created_at: new Date().toISOString(),
+      pending: true,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+
     const { data, error } = await supabase
       .from("messages")
       .insert({
@@ -199,17 +265,24 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
       .select("id, booking_id, sender_id, content, message_type, created_at")
       .single();
 
-    if (error) {
-      console.error("Failed to send message:", error);
+    if (error || !data) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === tempId ? { ...m, pending: false, failed: true } : m
+        )
+      );
+      setSendError("发送失败，请重试");
       return;
     }
-    if (data) {
-      const newMsg = data as Message;
-      setMessages((prev) => {
-        if (prev.some((x) => x.id === newMsg.id)) return prev;
-        return [...prev, newMsg];
-      });
-    }
+
+    const real = data as Message;
+    setMessages((prev) => {
+      // Realtime may have already inserted the real row.
+      if (prev.some((m) => m.id === real.id)) {
+        return prev.filter((m) => m.id !== tempId);
+      }
+      return prev.map((m) => (m.id === tempId ? real : m));
+    });
   }
 
   async function handleSend() {
@@ -234,11 +307,30 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
     }
   }
 
+  async function toggleSaved() {
+    if (!booking || role !== "user" || saveBusy) return;
+    const next = !booking.is_saved;
+    setSaveBusy(true);
+    // Optimistic flip
+    setBooking((b) => (b ? { ...b, is_saved: next } : b));
+    const { error } = await supabase
+      .from("bookings")
+      .update({ is_saved: next })
+      .eq("id", booking.id);
+    setSaveBusy(false);
+    if (error) {
+      // Roll back
+      setBooking((b) => (b ? { ...b, is_saved: !next } : b));
+    }
+  }
+
   const messageGroups = useMemo(() => groupMessages(messages), [messages]);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-muted">载入中...</div>
+      <div className="min-h-screen flex items-center justify-center text-muted">
+        载入中...
+      </div>
     );
   }
   if (forbidden) {
@@ -246,7 +338,10 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
       <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
         <p className="text-h2 font-medium mb-3">无法访问</p>
         <p className="text-muted mb-6">这个聊天室不属于你，或者预约不存在。</p>
-        <Link href={role === "listener" ? "/listener" : "/me"} className="btn-primary">
+        <Link
+          href={role === "listener" ? "/listener" : "/me"}
+          className="btn-primary"
+        >
           返回
         </Link>
       </div>
@@ -262,7 +357,6 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
 
   return (
     <div className="flex flex-col h-screen">
-      {/* Header */}
       <header className="sticky top-0 z-20 bg-background border-b border-border">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
           <Link
@@ -273,10 +367,16 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
             返回
           </Link>
           <div className="text-[14px] text-muted">
-            {sessionEnded ? "已结束" : sessionStarted ? `倾诉中 · 还剩 ${timeStr}` : "等待开始"}
+            {sessionEnded
+              ? "已结束"
+              : sessionStarted
+              ? `倾诉中 · 还剩 ${timeStr}`
+              : "等待开始"}
           </div>
-          {sessionStarted && !sessionEnded ? (
-            <span className="text-[13px] text-muted">{booking.counterparty_username}</span>
+          {sessionStarted || sessionEnded ? (
+            <span className="text-[13px] text-muted truncate max-w-[40%]">
+              {booking.counterparty_username}
+            </span>
           ) : (
             <span className="w-10" />
           )}
@@ -290,106 +390,124 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
         )}
       </header>
 
-      {/* Content */}
+      <div ref={containerRef} className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+          {pastRetention && messages.length === 0 ? (
+            <div className="card text-center text-muted">
+              <p className="mb-1 text-foreground/80">聊天记录已自动删除</p>
+              <p className="text-caption">
+                未保存的聊天记录会在 7 天后清空，倾诉记录仍会保留。
+              </p>
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="text-center text-muted text-[14px] py-12">
+              这是你们的聊天室。
+              <br />
+              {sessionEnded ? "这一次没有留下文字。" : "说点什么开始吧。"}
+            </div>
+          ) : (
+            messageGroups.map((group, i) => (
+              <div key={i} className="space-y-2">
+                {group.showTimestamp && (
+                  <div className="text-center text-caption text-muted py-1">
+                    {formatTime(new Date(group.messages[0].created_at))}
+                  </div>
+                )}
+                {group.messages.map((m) => (
+                  <MessageBubble
+                    key={m.id}
+                    message={m}
+                    mine={m.sender_id === me}
+                  />
+                ))}
+              </div>
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
+
       {sessionEnded ? (
-        <EndedScreen
+        <EndedFooter
           role={role}
+          isSaved={booking.is_saved}
+          saveBusy={saveBusy}
+          onToggleSaved={role === "user" ? toggleSaved : undefined}
           resourcesOpen={resourcesOpen}
           setResourcesOpen={setResourcesOpen}
+          pastRetention={pastRetention}
         />
       ) : (
-        <>
-          <div ref={containerRef} className="flex-1 overflow-y-auto">
-            <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-              {messages.length === 0 && (
-                <div className="text-center text-muted text-[14px] py-12">
-                  这是你们的聊天室。
-                  <br />
-                  说点什么开始吧。
-                </div>
-              )}
-              {messageGroups.map((group, i) => (
-                <div key={i} className="space-y-2">
-                  {group.showTimestamp && (
-                    <div className="text-center text-caption text-muted py-1">
-                      {formatTime(new Date(group.messages[0].created_at))}
-                    </div>
-                  )}
-                  {group.messages.map((m) => (
-                    <MessageBubble key={m.id} message={m} mine={m.sender_id === me} />
-                  ))}
-                </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
-          </div>
-
-          {/* Input */}
-          <div className="border-t border-border bg-background">
-            <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3">
-              {role === "listener" && meetingPanelOpen && (
-                <div className="mb-3 flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={meetingCode}
-                    onChange={(e) => setMeetingCode(e.target.value)}
-                    placeholder="粘贴腾讯会议号"
-                    className="input flex-1"
-                  />
-                  <button
-                    onClick={handleSendMeetingCode}
-                    disabled={!meetingCode.trim()}
-                    className="btn-primary"
-                  >
-                    发送
-                  </button>
-                  <button
-                    onClick={() => setMeetingPanelOpen(false)}
-                    className="btn-ghost"
-                  >
-                    取消
-                  </button>
-                </div>
-              )}
-              <div className="flex items-end gap-2">
-                <div className="flex-1 relative">
-                  <textarea
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
-                    onKeyDown={onKeyDown}
-                    placeholder="说点什么..."
-                    rows={1}
-                    className="input resize-none min-h-[44px] max-h-32 py-2.5"
-                    style={{ paddingRight: draft.length > 800 ? 60 : undefined }}
-                  />
-                  {draft.length > 800 && (
-                    <span className="absolute right-3 bottom-2 text-[12px] text-muted">
-                      {draft.length} / 1000
-                    </span>
-                  )}
-                </div>
-                {role === "listener" && (
-                  <button
-                    type="button"
-                    onClick={() => setMeetingPanelOpen((v) => !v)}
-                    className="btn-secondary py-2.5 px-3 text-[13px]"
-                    title="发送腾讯会议号"
-                  >
-                    发送会议号
-                  </button>
-                )}
+        <div className="border-t border-border bg-background">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3">
+            {sendError && (
+              <div className="mb-2 text-[13px] text-danger inline-flex items-center gap-1.5">
+                <AlertCircle size={14} />
+                {sendError}
+              </div>
+            )}
+            {role === "listener" && meetingPanelOpen && (
+              <div className="mb-3 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={meetingCode}
+                  onChange={(e) => setMeetingCode(e.target.value)}
+                  placeholder="粘贴腾讯会议号"
+                  className="block flex-1 h-11 rounded-lg border border-border bg-surface text-foreground text-[15px] px-3.5 outline-none focus:border-accent placeholder:text-muted transition-colors"
+                />
                 <button
-                  onClick={handleSend}
-                  disabled={!draft.trim() || sessionEnded}
-                  className="btn-primary py-2.5 px-4"
-                  aria-label="发送"
+                  onClick={handleSendMeetingCode}
+                  disabled={!meetingCode.trim()}
+                  className="inline-flex items-center justify-center h-11 px-5 rounded-full bg-accent text-white border border-accent text-[15px] font-medium transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                 >
-                  <Send size={16} />
+                  发送
+                </button>
+                <button
+                  onClick={() => setMeetingPanelOpen(false)}
+                  className="inline-flex items-center justify-center h-11 px-4 rounded-full text-foreground text-[15px] font-medium hover:bg-accent-soft transition-colors shrink-0"
+                >
+                  取消
                 </button>
               </div>
+            )}
+            <div className="flex items-end gap-2">
+              <div className="flex-1 relative">
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
+                  onKeyDown={onKeyDown}
+                  placeholder="说点什么..."
+                  rows={1}
+                  className="block w-full resize-none rounded-lg border border-border bg-surface text-foreground text-[15px] leading-5 py-[11px] px-3.5 min-h-[44px] max-h-32 outline-none focus:border-accent placeholder:text-muted transition-colors"
+                  style={{ paddingRight: draft.length > 800 ? 60 : undefined }}
+                />
+                {draft.length > 800 && (
+                  <span className="absolute right-3 bottom-2 text-[12px] text-muted">
+                    {draft.length} / 1000
+                  </span>
+                )}
+              </div>
+              {role === "listener" && (
+                <button
+                  type="button"
+                  onClick={() => setMeetingPanelOpen((v) => !v)}
+                  className="inline-flex items-center justify-center h-11 px-4 rounded-full border border-border text-[13px] text-foreground hover:border-accent hover:bg-accent-soft transition-colors shrink-0"
+                  title="发送腾讯会议号"
+                >
+                  发送会议号
+                </button>
+              )}
+              <button
+                onClick={handleSend}
+                disabled={!draft.trim() || sessionEnded}
+                className="inline-flex items-center justify-center h-11 w-11 rounded-full bg-accent text-white border border-accent transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                aria-label="发送"
+              >
+                <Send size={16} />
+              </button>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
@@ -418,7 +536,9 @@ function MessageBubble({ message, mine }: { message: Message; mine: boolean }) {
         <div className="max-w-[70%]">
           <div className="text-caption text-muted mb-1 px-1">腾讯会议号</div>
           <div className="rounded-xl border border-accent bg-accent-soft px-4 py-3 flex items-center gap-3">
-            <span className="font-mono text-[15px] tracking-wider">{message.content}</span>
+            <span className="font-mono text-[15px] tracking-wider">
+              {message.content}
+            </span>
             <button
               onClick={copy}
               className="text-[13px] text-accent hover:opacity-80 inline-flex items-center gap-1"
@@ -441,25 +561,33 @@ function MessageBubble({ message, mine }: { message: Message; mine: boolean }) {
 
   if (message.message_type === "system") {
     return (
-      <div className="text-center text-caption text-muted py-1">{message.content}</div>
+      <div className="text-center text-caption text-muted py-1">
+        {message.content}
+      </div>
     );
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 6, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.22, ease: [0.215, 0.61, 0.355, 1] }}
-      className={`flex ${mine ? "justify-end" : "justify-start"}`}
-    >
-      <div
-        className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap break-words ${
-          mine
-            ? "bg-accent text-white rounded-br-sm"
-            : "bg-surface border border-border rounded-bl-sm"
-        }`}
-      >
-        {message.content}
+    <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+      <div className="flex flex-col max-w-[70%]">
+        <div
+          className={`rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap break-words ${
+            mine
+              ? `bg-accent text-white rounded-br-sm ${message.pending ? "opacity-70" : ""} ${message.failed ? "opacity-60" : ""}`
+              : "bg-surface border border-border rounded-bl-sm"
+          }`}
+        >
+          {message.content}
+        </div>
+        {mine && (message.pending || message.failed) && (
+          <span
+            className={`text-caption mt-1 px-1 self-end ${
+              message.failed ? "text-danger" : "text-muted"
+            }`}
+          >
+            {message.failed ? "发送失败" : "发送中…"}
+          </span>
+        )}
       </div>
     </motion.div>
   );
@@ -484,44 +612,82 @@ function groupMessages(messages: Message[]): Group[] {
   return groups;
 }
 
-function EndedScreen({
+function EndedFooter({
   role,
+  isSaved,
+  saveBusy,
+  onToggleSaved,
   resourcesOpen,
   setResourcesOpen,
+  pastRetention,
 }: {
   role: "user" | "listener";
+  isSaved: boolean;
+  saveBusy: boolean;
+  onToggleSaved?: () => void;
   resourcesOpen: boolean;
   setResourcesOpen: (v: boolean) => void;
+  pastRetention: boolean;
 }) {
   return (
-    <div className="flex-1 flex items-center justify-center px-6">
-      <div className="max-w-prose w-full py-12">
-        <p className="text-h2 font-medium tracking-tight text-center mb-10">
-          这次倾诉结束了。
-        </p>
-        <p className="text-[15px] text-foreground/85 leading-relaxed text-center mb-6">
-          如果今天聊的内容让你觉得有些事情可能需要更专业的帮助，
-        </p>
-        <button
-          onClick={() => setResourcesOpen(!resourcesOpen)}
-          className="mx-auto flex items-center gap-1 text-[14px] text-accent mb-4"
-        >
-          {resourcesOpen ? "收起" : "展开"}{" "}
-          <ChevronDown
-            size={14}
-            className={`transition-transform ${resourcesOpen ? "rotate-180" : ""}`}
-          />
-          {!resourcesOpen && <span className="ml-1 text-foreground">这里有一些资源</span>}
-        </button>
+    <div className="border-t border-border bg-background">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="text-[14px] text-muted">
+            {pastRetention
+              ? "这次倾诉的聊天记录已自动删除。"
+              : isSaved
+              ? "这次的聊天记录已保存，不会被自动删除。"
+              : "未保存的聊天记录会在 7 天后自动删除，倾诉记录会一直保留。"}
+          </div>
+          {onToggleSaved && !pastRetention && (
+            <button
+              onClick={onToggleSaved}
+              disabled={saveBusy}
+              className={`inline-flex items-center gap-1.5 text-[13px] px-3 py-1.5 rounded-md border transition-colors ${
+                isSaved
+                  ? "border-accent text-accent bg-accent-soft"
+                  : "border-border text-muted hover:text-foreground"
+              } ${saveBusy ? "opacity-60" : ""}`}
+            >
+              {isSaved ? (
+                <>
+                  <BookmarkCheck size={14} />
+                  已保存
+                </>
+              ) : (
+                <>
+                  <Bookmark size={14} />
+                  保存聊天记录
+                </>
+              )}
+            </button>
+          )}
+        </div>
+
+        <div className="text-center">
+          <button
+            onClick={() => setResourcesOpen(!resourcesOpen)}
+            className="inline-flex items-center gap-1 text-[14px] text-accent"
+          >
+            {resourcesOpen ? "收起" : "如果想看一些专业资源"}{" "}
+            <ChevronDown
+              size={14}
+              className={`transition-transform ${resourcesOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+        </div>
+
         {resourcesOpen && (
-          <div className="card mb-10 text-[14px] leading-relaxed text-foreground/85 space-y-2">
+          <div className="card text-[14px] leading-relaxed text-foreground/85 space-y-2">
             <ResourceItem text="全国心理援助热线: 400-161-9995" />
             <ResourceItem text="北京心理危机研究与干预中心: 010-82951332" />
             <ResourceItem text="12355 青少年服务热线" />
             <ResourceItem text="各地三甲医院的精神科 / 心理科" />
           </div>
         )}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-10">
+
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">
           {role === "user" && (
             <Link href="/book" className="btn-primary">
               预约下一次
