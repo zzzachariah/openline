@@ -1,20 +1,7 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Plus, X } from "lucide-react";
-import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
-import BookingCard, { BookingCardData } from "@/components/BookingCard";
-import { createBrowserClient } from "@/lib/supabase/client";
-import { formatDate, formatDayHeader, formatDayKey, formatTime, formatTimeRange } from "@/lib/format";
-
-type Slot = {
-  id: string;
-  start_time: string;
-  end_time: string;
-  is_booked: boolean;
-};
+import { redirect } from "next/navigation";
+import { createServerClient } from "@/lib/supabase/server";
+import { BookingCardData } from "@/components/BookingCard";
+import ListenerPageClient, { type Slot, type ReceivedReview } from "./ListenerPageClient";
 
 type RawBooking = {
   id: string;
@@ -25,31 +12,24 @@ type RawBooking = {
   slot: { start_time: string; end_time: string } | { start_time: string; end_time: string }[];
 };
 
-type ReceivedReview = {
-  id: string;
-  comment: string;
-  listener_reply: string | null;
-  created_at: string;
-  replied_at: string | null;
-};
+export const dynamic = "force-dynamic";
 
-type SectionTab = "slots" | "bookings" | "reviews";
-
-export default function ListenerPage() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [username, setUsername] = useState<string | null>(null);
-  const [slots, setSlots] = useState<Slot[]>([]);
-  const [bookings, setBookings] = useState<BookingCardData[]>([]);
-  const [reviews, setReviews] = useState<ReceivedReview[]>([]);
-  const [tab, setTab] = useState<SectionTab>("slots");
-  const [showAdd, setShowAdd] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
+export default async function ListenerPage() {
+  const supabase = createServerClient();
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) {
+    redirect("/login?redirect=/listener");
+  }
 
   const userId = auth.user.id;
   const nowIso = new Date().toISOString();
 
-  const [{ data: profile }, { data: slotRows }, { data: bookingRows }] = await Promise.all([
+  const [
+    { data: profile },
+    { data: slotRows },
+    { data: bookingRows },
+    { data: reviewRows },
+  ] = await Promise.all([
     supabase
       .from("profiles")
       .select("username, is_listener, listener_application_at")
@@ -66,82 +46,14 @@ export default function ListenerPage() {
       .select(
         "id, format, status, is_saved, user:profiles!bookings_user_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
       )
-      .eq("listener_id", auth.user.id)
-      .order("created_at", { ascending: false });
-    if (bookingRows) {
-      const mapped: BookingCardData[] = (bookingRows as RawBooking[]).map((r) => {
-        const user = Array.isArray(r.user) ? r.user[0] : r.user;
-        const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
-        return {
-          id: r.id,
-          format: r.format,
-          status: r.status,
-          counterpartyUsername: user.username,
-          startTime: slot.start_time,
-          endTime: slot.end_time,
-        };
-      });
-      setBookings(mapped);
-    }
-
-    const { data: reviewRows } = await supabase
+      .eq("listener_id", userId)
+      .order("created_at", { ascending: false }),
+    supabase
       .from("reviews")
       .select("id, comment, listener_reply, created_at, replied_at")
-      .eq("listener_id", auth.user.id)
-      .order("created_at", { ascending: false });
-    setReviews((reviewRows || []) as ReceivedReview[]);
-
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function deleteSlot(id: string) {
-    if (!confirm("确认删除这个时段？")) return;
-    const supabase = createBrowserClient();
-    await supabase.from("time_slots").delete().eq("id", id);
-    setSlots((prev) => prev.filter((s) => s.id !== id));
-  }
-
-  return (
-    <>
-      <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
-        <div className="max-w-prose mx-auto px-6">
-          <div className="mb-10">
-            <h1 className="text-h2 font-medium tracking-tight">倾听者后台</h1>
-            <p className="text-caption text-muted mt-1">{username}</p>
-          </div>
-
-          <div className="flex gap-1 mb-6 border-b border-border">
-            <TabButton active={tab === "slots"} onClick={() => setTab("slots")} label="我的时段" />
-            <TabButton
-              active={tab === "bookings"}
-              onClick={() => setTab("bookings")}
-              label="我的预约"
-            />
-            <TabButton
-              active={tab === "reviews"}
-              onClick={() => setTab("reviews")}
-              label={reviews.length > 0 ? `收到的评价 · ${reviews.length}` : "收到的评价"}
-            />
-          </div>
-
-          {loading ? (
-            <div className="text-muted text-center py-12">载入中...</div>
-          ) : tab === "slots" ? (
-            <SlotsSection slots={slots} onAdd={() => setShowAdd(true)} onDelete={deleteSlot} />
-          ) : tab === "bookings" ? (
-            <BookingsSection bookings={bookings} now={now} onCancel={() => reload()} />
-          ) : (
-            <ReviewsSection reviews={reviews} onReplyUpdated={() => reload()} />
-          )}
-        </div>
-      </main>
-      <Footer />
+      .eq("listener_id", userId)
+      .order("created_at", { ascending: false }),
+  ]);
 
   if (!profile?.is_listener) {
     if (profile?.listener_application_at) {
@@ -164,6 +76,7 @@ export default function ListenerPage() {
       isSaved: !!r.is_saved,
     };
   });
+  const reviews: ReceivedReview[] = (reviewRows ?? []) as ReceivedReview[];
 
   return (
     <ListenerPageClient
@@ -171,312 +84,7 @@ export default function ListenerPage() {
       username={profile.username}
       initialSlots={slots}
       initialBookings={bookings}
+      initialReviews={reviews}
     />
-  );
-}
-
-function ReviewsSection({
-  reviews,
-  onReplyUpdated,
-}: {
-  reviews: ReceivedReview[];
-  onReplyUpdated: () => void;
-}) {
-  if (reviews.length === 0) {
-    return (
-      <div className="card text-center text-muted">
-        <p>还没有收到评价。</p>
-      </div>
-    );
-  }
-  return (
-    <div className="space-y-3">
-      {reviews.map((r) => (
-        <ReviewReplyCard key={r.id} review={r} onSaved={onReplyUpdated} />
-      ))}
-    </div>
-  );
-}
-
-function ReviewReplyCard({
-  review,
-  onSaved,
-}: {
-  review: ReceivedReview;
-  onSaved: () => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [reply, setReply] = useState(review.listener_reply ?? "");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const MAX = 1000;
-  const remaining = MAX - reply.length;
-
-  async function save() {
-    const trimmed = reply.trim();
-    if (!trimmed) {
-      setError("回复不能为空");
-      return;
-    }
-    if (trimmed.length > MAX) {
-      setError(`回复不能超过 ${MAX} 字`);
-      return;
-    }
-    setError(null);
-    setSubmitting(true);
-    const supabase = createBrowserClient();
-    const { error: e } = await supabase
-      .from("reviews")
-      .update({ listener_reply: trimmed })
-      .eq("id", review.id);
-    if (e) {
-      setError("保存失败，请稍后再试");
-      setSubmitting(false);
-      return;
-    }
-    setEditing(false);
-    setSubmitting(false);
-    onSaved();
-  }
-
-  async function remove() {
-    if (!confirm("删除你的回复？")) return;
-    setSubmitting(true);
-    const supabase = createBrowserClient();
-    const { error: e } = await supabase
-      .from("reviews")
-      .update({ listener_reply: null })
-      .eq("id", review.id);
-    if (e) {
-      setError("删除失败，请稍后再试");
-      setSubmitting(false);
-      return;
-    }
-    setReply("");
-    setEditing(false);
-    setSubmitting(false);
-    onSaved();
-  }
-
-  return (
-    <div className="card">
-      <div className="text-caption text-muted mb-1.5">
-        {formatDate(new Date(review.created_at))}
-      </div>
-      <div className="text-[14px] whitespace-pre-wrap break-words mb-3">{review.comment}</div>
-
-      {!editing && review.listener_reply && (
-        <div className="bg-accent-soft border-l-2 border-accent rounded-r px-3 py-2">
-          <div className="flex items-center justify-between gap-3 mb-1">
-            <span className="text-caption text-muted">你的回复</span>
-            <button
-              onClick={() => {
-                setReply(review.listener_reply ?? "");
-                setEditing(true);
-              }}
-              className="text-[12px] text-accent hover:underline"
-            >
-              编辑
-            </button>
-          </div>
-          <div className="text-[14px] whitespace-pre-wrap break-words">
-            {review.listener_reply}
-          </div>
-        </div>
-      )}
-
-      {!editing && !review.listener_reply && (
-        <button
-          onClick={() => {
-            setReply("");
-            setEditing(true);
-          }}
-          className="text-[13px] text-accent hover:underline"
-        >
-          回复
-        </button>
-      )}
-
-      {editing && (
-        <div className="space-y-2">
-          <textarea
-            value={reply}
-            onChange={(e) => setReply(e.target.value)}
-            maxLength={MAX}
-            rows={4}
-            placeholder="写下你的回复……"
-            className="input resize-none"
-          />
-          <div className="flex justify-between items-center">
-            <span className="text-caption text-muted">
-              {remaining < 0 ? `超出 ${-remaining} 字` : `还可输入 ${remaining} 字`}
-            </span>
-          </div>
-          {error && <div className="text-[13px] text-danger">{error}</div>}
-          <div className="flex gap-3 justify-end">
-            {review.listener_reply && (
-              <button
-                onClick={remove}
-                disabled={submitting}
-                className="text-[13px] text-muted hover:text-danger transition-colors mr-auto"
-              >
-                删除回复
-              </button>
-            )}
-            <button
-              onClick={() => {
-                setEditing(false);
-                setError(null);
-                setReply(review.listener_reply ?? "");
-              }}
-              disabled={submitting}
-              className="text-[13px] text-muted hover:text-foreground px-3 py-1.5"
-            >
-              取消
-            </button>
-            <button
-              onClick={save}
-              disabled={submitting}
-              className="text-[13px] bg-accent text-white rounded-full px-4 py-1.5 hover:opacity-90 disabled:opacity-50"
-            >
-              {submitting ? "保存中..." : "保存"}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AddSlotModal({
-  onClose,
-  onSuccess,
-}: {
-  onClose: () => void;
-  onSuccess: () => void;
-}) {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const defaultDate = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(
-    2,
-    "0"
-  )}-${String(tomorrow.getDate()).padStart(2, "0")}`;
-
-  const [date, setDate] = useState(defaultDate);
-  const [time, setTime] = useState("20:00");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit() {
-    setError(null);
-    if (!date || !time) {
-      setError("请填写日期和时间");
-      return;
-    }
-    const start = new Date(`${date}T${time}:00`);
-    if (isNaN(start.getTime())) {
-      setError("日期或时间格式错误");
-      return;
-    }
-    if (start.getTime() < Date.now()) {
-      setError("时间必须在未来");
-      return;
-    }
-    const end = new Date(start.getTime() + 40 * 60 * 1000);
-
-    setSubmitting(true);
-    const supabase = createBrowserClient();
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) {
-      setError("登录已过期");
-      setSubmitting(false);
-      return;
-    }
-
-    // Pre-check: this listener cannot have a slot that overlaps an existing one.
-    // The DB also enforces this via an exclusion constraint, so this is just to
-    // surface a friendlier error before round-tripping.
-    const { data: overlapping } = await supabase
-      .from("time_slots")
-      .select("id")
-      .eq("listener_id", auth.user.id)
-      .lt("start_time", end.toISOString())
-      .gt("end_time", start.toISOString())
-      .limit(1);
-    if (overlapping && overlapping.length > 0) {
-      setError("这个时段和你已有的时段重叠了");
-      setSubmitting(false);
-      return;
-    }
-
-    const { error: insertErr } = await supabase.from("time_slots").insert({
-      listener_id: auth.user.id,
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
-      is_booked: false,
-    });
-    if (insertErr) {
-      // 23P01 = exclusion_violation (overlap caught by the DB constraint)
-      if (insertErr.code === "23P01") {
-        setError("这个时段和你已有的时段重叠了");
-      } else {
-        setError("创建失败，请稍后再试");
-      }
-      setSubmitting(false);
-      return;
-    }
-    onSuccess();
-  }
-
-  const start = date && time ? new Date(`${date}T${time}:00`) : null;
-  const end = start && !isNaN(start.getTime()) ? new Date(start.getTime() + 40 * 60 * 1000) : null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-      <div className="absolute inset-0 bg-black/30" onClick={() => !submitting && onClose()} />
-      <div className="relative bg-surface border border-border rounded-xl p-7 w-full max-w-[440px]">
-        <button
-          onClick={() => !submitting && onClose()}
-          className="absolute top-4 right-4 text-muted hover:text-foreground"
-          aria-label="关闭"
-        >
-          <X size={18} />
-        </button>
-        <h3 className="text-[18px] font-medium mb-5">添加时段</h3>
-        <div className="space-y-4">
-          <label className="block">
-            <span className="text-caption text-muted block mb-1.5">日期</span>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="input"
-            />
-          </label>
-          <label className="block">
-            <span className="text-caption text-muted block mb-1.5">开始时间</span>
-            <input
-              type="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              className="input"
-            />
-          </label>
-          <div className="text-caption text-muted">
-            时长 40 分钟{end ? `（${formatTime(start!)} — ${formatTime(end)}）` : ""}
-          </div>
-        </div>
-        {error && <div className="text-[13px] text-danger mt-3">{error}</div>}
-        <div className="flex gap-3 justify-end mt-6">
-          <button onClick={onClose} disabled={submitting} className="btn-ghost">
-            取消
-          </button>
-          <button onClick={submit} disabled={submitting} className="btn-primary">
-            {submitting ? "创建中..." : "创建时段"}
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }

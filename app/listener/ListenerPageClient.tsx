@@ -5,7 +5,7 @@ import { Plus, X } from "lucide-react";
 import Nav from "@/components/Nav";
 import BookingCard, { BookingCardData } from "@/components/BookingCard";
 import { createBrowserClient } from "@/lib/supabase/client";
-import { formatDayHeader, formatDayKey, formatTime, formatTimeRange } from "@/lib/format";
+import { formatDate, formatDayHeader, formatDayKey, formatTime, formatTimeRange } from "@/lib/format";
 import { useListenerSlots, useListenerBookings } from "@/lib/hooks/useListenerData";
 
 export type Slot = {
@@ -15,13 +15,22 @@ export type Slot = {
   is_booked: boolean;
 };
 
-type SectionTab = "slots" | "bookings";
+export type ReceivedReview = {
+  id: string;
+  comment: string;
+  listener_reply: string | null;
+  created_at: string;
+  replied_at: string | null;
+};
+
+type SectionTab = "slots" | "bookings" | "reviews";
 
 type Props = {
   userId: string;
   username: string;
   initialSlots: Slot[];
   initialBookings: BookingCardData[];
+  initialReviews: ReceivedReview[];
 };
 
 export default function ListenerPageClient({
@@ -29,15 +38,27 @@ export default function ListenerPageClient({
   username,
   initialSlots,
   initialBookings,
+  initialReviews,
 }: Props) {
   const { data: slots = [], mutate: mutateSlots } = useListenerSlots(userId, initialSlots);
   const { data: bookings = [], mutate: mutateBookings } = useListenerBookings(
     userId,
     initialBookings
   );
+  const [reviews, setReviews] = useState<ReceivedReview[]>(initialReviews);
   const [tab, setTab] = useState<SectionTab>("slots");
   const [showAdd, setShowAdd] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+
+  async function reloadReviews() {
+    const supabase = createBrowserClient();
+    const { data } = await supabase
+      .from("reviews")
+      .select("id, comment, listener_reply, created_at, replied_at")
+      .eq("listener_id", userId)
+      .order("created_at", { ascending: false });
+    setReviews((data ?? []) as ReceivedReview[]);
+  }
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30000);
@@ -77,16 +98,23 @@ export default function ListenerPageClient({
               onClick={() => setTab("bookings")}
               label="我的预约"
             />
+            <TabButton
+              active={tab === "reviews"}
+              onClick={() => setTab("reviews")}
+              label={reviews.length > 0 ? `收到的评价 · ${reviews.length}` : "收到的评价"}
+            />
           </div>
 
           {tab === "slots" ? (
             <SlotsSection slots={slots} onAdd={() => setShowAdd(true)} onDelete={deleteSlot} />
-          ) : (
+          ) : tab === "bookings" ? (
             <BookingsSection
               bookings={bookings}
               now={now}
               onCancel={() => mutateBookings()}
             />
+          ) : (
+            <ReviewsSection reviews={reviews} onReplyUpdated={reloadReviews} />
           )}
         </div>
       </main>
@@ -221,6 +249,180 @@ function BookingsSection({
   );
 }
 
+function ReviewsSection({
+  reviews,
+  onReplyUpdated,
+}: {
+  reviews: ReceivedReview[];
+  onReplyUpdated: () => void;
+}) {
+  if (reviews.length === 0) {
+    return (
+      <div className="card text-center text-muted">
+        <p>还没有收到评价。</p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      {reviews.map((r) => (
+        <ReviewReplyCard key={r.id} review={r} onSaved={onReplyUpdated} />
+      ))}
+    </div>
+  );
+}
+
+function ReviewReplyCard({
+  review,
+  onSaved,
+}: {
+  review: ReceivedReview;
+  onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [reply, setReply] = useState(review.listener_reply ?? "");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const MAX = 1000;
+  const remaining = MAX - reply.length;
+
+  async function save() {
+    const trimmed = reply.trim();
+    if (!trimmed) {
+      setError("回复不能为空");
+      return;
+    }
+    if (trimmed.length > MAX) {
+      setError(`回复不能超过 ${MAX} 字`);
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    const supabase = createBrowserClient();
+    const { error: e } = await supabase
+      .from("reviews")
+      .update({ listener_reply: trimmed })
+      .eq("id", review.id);
+    if (e) {
+      setError("保存失败，请稍后再试");
+      setSubmitting(false);
+      return;
+    }
+    setEditing(false);
+    setSubmitting(false);
+    onSaved();
+  }
+
+  async function remove() {
+    if (!confirm("删除你的回复？")) return;
+    setSubmitting(true);
+    const supabase = createBrowserClient();
+    const { error: e } = await supabase
+      .from("reviews")
+      .update({ listener_reply: null })
+      .eq("id", review.id);
+    if (e) {
+      setError("删除失败，请稍后再试");
+      setSubmitting(false);
+      return;
+    }
+    setReply("");
+    setEditing(false);
+    setSubmitting(false);
+    onSaved();
+  }
+
+  return (
+    <div className="card">
+      <div className="text-caption text-muted mb-1.5">
+        {formatDate(new Date(review.created_at))}
+      </div>
+      <div className="text-[14px] whitespace-pre-wrap break-words mb-3">{review.comment}</div>
+
+      {!editing && review.listener_reply && (
+        <div className="bg-accent-soft border-l-2 border-accent rounded-r px-3 py-2">
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <span className="text-caption text-muted">你的回复</span>
+            <button
+              onClick={() => {
+                setReply(review.listener_reply ?? "");
+                setEditing(true);
+              }}
+              className="text-[12px] text-accent hover:underline"
+            >
+              编辑
+            </button>
+          </div>
+          <div className="text-[14px] whitespace-pre-wrap break-words">
+            {review.listener_reply}
+          </div>
+        </div>
+      )}
+
+      {!editing && !review.listener_reply && (
+        <button
+          onClick={() => {
+            setReply("");
+            setEditing(true);
+          }}
+          className="text-[13px] text-accent hover:underline"
+        >
+          回复
+        </button>
+      )}
+
+      {editing && (
+        <div className="space-y-2">
+          <textarea
+            value={reply}
+            onChange={(e) => setReply(e.target.value)}
+            maxLength={MAX}
+            rows={4}
+            placeholder="写下你的回复……"
+            className="input resize-none"
+          />
+          <div className="flex justify-between items-center">
+            <span className="text-caption text-muted">
+              {remaining < 0 ? `超出 ${-remaining} 字` : `还可输入 ${remaining} 字`}
+            </span>
+          </div>
+          {error && <div className="text-[13px] text-danger">{error}</div>}
+          <div className="flex gap-3 justify-end">
+            {review.listener_reply && (
+              <button
+                onClick={remove}
+                disabled={submitting}
+                className="text-[13px] text-muted hover:text-danger transition-colors mr-auto"
+              >
+                删除回复
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setEditing(false);
+                setError(null);
+                setReply(review.listener_reply ?? "");
+              }}
+              disabled={submitting}
+              className="text-[13px] text-muted hover:text-foreground px-3 py-1.5"
+            >
+              取消
+            </button>
+            <button
+              onClick={save}
+              disabled={submitting}
+              className="text-[13px] bg-accent text-white rounded-full px-4 py-1.5 hover:opacity-90 disabled:opacity-50"
+            >
+              {submitting ? "保存中..." : "保存"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AddSlotModal({
   onClose,
   onSuccess,
@@ -266,6 +468,19 @@ function AddSlotModal({
       return;
     }
 
+    const { data: overlapping } = await supabase
+      .from("time_slots")
+      .select("id")
+      .eq("listener_id", auth.user.id)
+      .lt("start_time", end.toISOString())
+      .gt("end_time", start.toISOString())
+      .limit(1);
+    if (overlapping && overlapping.length > 0) {
+      setError("这个时段和你已有的时段重叠了");
+      setSubmitting(false);
+      return;
+    }
+
     const { error: insertErr } = await supabase.from("time_slots").insert({
       listener_id: auth.user.id,
       start_time: start.toISOString(),
@@ -273,7 +488,11 @@ function AddSlotModal({
       is_booked: false,
     });
     if (insertErr) {
-      setError("创建失败，请稍后再试");
+      if (insertErr.code === "23P01") {
+        setError("这个时段和你已有的时段重叠了");
+      } else {
+        setError("创建失败，请稍后再试");
+      }
       setSubmitting(false);
       return;
     }
