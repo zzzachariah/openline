@@ -99,6 +99,8 @@ function ListenerSignupContent() {
                 我们不需要你的姓名、邮箱或电话。
                 <br />
                 注册后我们会人工审核你的申请。
+                <br />
+                请联系 zzzachariah9828@gmail.com，邮件必须包含用户名以及申请原因。
               </p>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="relative">
