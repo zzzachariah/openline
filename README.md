@@ -148,7 +148,7 @@ update auth.users
 
 ### 7-day message auto-deletion
 
-The privacy promise on the homepage states that chat messages are deleted after 7 days. To enforce this in the database, enable `pg_cron` and schedule a cleanup job. The relevant SQL is included (commented out) at the bottom of `supabase/schema.sql`:
+The privacy promise on the homepage states that chat messages are deleted after 7 days **unless the user (倾诉者) marks the chat as saved**. The booking row itself (the "倾听记录" — who, when, with whom) stays either way. To enforce this in the database, enable `pg_cron` and schedule a cleanup job. The relevant SQL is included (commented out) at the bottom of `supabase/schema.sql`:
 
 ```sql
 create extension if not exists pg_cron;
@@ -156,7 +156,14 @@ create extension if not exists pg_cron;
 select cron.schedule(
   'delete-old-messages',
   '0 3 * * *',   -- every day at 03:00 UTC
-  $$ delete from public.messages where created_at < now() - interval '7 days' $$
+  $$
+    delete from public.messages m
+     where m.created_at < now() - interval '7 days'
+       and not exists (
+         select 1 from public.bookings b
+          where b.id = m.booking_id and b.is_saved = true
+       )
+  $$
 );
 ```
 
