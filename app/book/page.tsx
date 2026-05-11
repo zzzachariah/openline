@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
+import ListenerReviewsModal from "@/components/ListenerReviewsModal";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { formatDayHeader, formatDayKey, formatTimeRange } from "@/lib/format";
 
@@ -29,6 +30,7 @@ export default function BookPage() {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [authChecked, setAuthChecked] = useState(false);
   const [selected, setSelected] = useState<Slot | null>(null);
+  const [reviewsFor, setReviewsFor] = useState<{ id: string; username: string } | null>(null);
   const [format, setFormat] = useState<"text" | "voice">("text");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -165,28 +167,51 @@ export default function BookPage() {
                     {group.slots.map((s) => {
                       const start = new Date(s.start_time);
                       const end = new Date(s.end_time);
+                      const pick = () => {
+                        setSelected(s);
+                        setFormat("text");
+                        setError(null);
+                      };
                       return (
-                        <button
+                        <div
                           key={s.id}
-                          onClick={() => {
-                            setSelected(s);
-                            setFormat("text");
-                            setError(null);
+                          role="button"
+                          tabIndex={0}
+                          onClick={pick}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              pick();
+                            }
                           }}
-                          className="w-full text-left card hover:border-accent transition-colors"
+                          className="w-full text-left card hover:border-accent transition-colors cursor-pointer focus:outline-none focus:border-accent"
                         >
                           <div className="flex items-center justify-between gap-4">
-                            <div>
+                            <div className="min-w-0">
                               <div className="text-[15px] font-medium">
                                 {formatTimeRange(start, end)}
                               </div>
-                              <div className="text-caption text-muted mt-0.5">
-                                {s.listener.username}
+                              <div className="text-caption text-muted mt-0.5 flex items-center gap-2 flex-wrap">
+                                <span>{s.listener.username}</span>
+                                <span className="text-border">·</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setReviewsFor({
+                                      id: s.listener.id,
+                                      username: s.listener.username,
+                                    });
+                                  }}
+                                  className="text-accent hover:underline"
+                                >
+                                  查看评价
+                                </button>
                               </div>
                             </div>
-                            <span className="text-caption text-accent">预约 →</span>
+                            <span className="text-caption text-accent shrink-0">预约 →</span>
                           </div>
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -197,6 +222,14 @@ export default function BookPage() {
         </div>
       </main>
       <Footer />
+
+      {reviewsFor && (
+        <ListenerReviewsModal
+          listenerId={reviewsFor.id}
+          listenerUsername={reviewsFor.username}
+          onClose={() => setReviewsFor(null)}
+        />
+      )}
 
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
@@ -214,7 +247,24 @@ export default function BookPage() {
             </button>
             <h3 className="text-[18px] font-medium mb-5">确认预约？</h3>
             <div className="space-y-3 text-[14px] mb-6">
-              <Row label="倾听者" value={selected.listener.username} />
+              <div className="flex items-start justify-between gap-4">
+                <span className="text-muted shrink-0">倾听者</span>
+                <div className="text-right">
+                  <div>{selected.listener.username}</div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setReviewsFor({
+                        id: selected.listener.id,
+                        username: selected.listener.username,
+                      })
+                    }
+                    className="text-[12px] text-accent hover:underline mt-0.5"
+                  >
+                    查看评价
+                  </button>
+                </div>
+              </div>
               <Row
                 label="时间"
                 value={`${formatDayHeader(new Date(selected.start_time))} ${formatTimeRange(

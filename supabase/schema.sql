@@ -74,6 +74,23 @@ create table if not exists public.messages (
 
 create index if not exists messages_booking_idx on public.messages(booking_id, created_at);
 
+-- Reviews: one per completed booking. Users write `comment`; listeners may add `listener_reply`.
+create table if not exists public.reviews (
+  id              uuid primary key default gen_random_uuid(),
+  booking_id      uuid not null unique references public.bookings(id) on delete cascade,
+  user_id         uuid not null references public.profiles(id) on delete cascade,
+  listener_id     uuid not null references public.profiles(id) on delete cascade,
+  comment         text not null,
+  listener_reply  text,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+  replied_at      timestamptz,
+  constraint reviews_comment_not_blank check (length(btrim(comment)) > 0)
+);
+
+create index if not exists reviews_listener_idx on public.reviews(listener_id, created_at desc);
+create index if not exists reviews_user_idx     on public.reviews(user_id, created_at desc);
+
 -- Homepage counter
 create table if not exists public.stats (
   id     text primary key,
@@ -108,6 +125,46 @@ create trigger bookings_increment_counter
   after insert on public.bookings
   for each row execute function public.increment_booking_counter();
 
+-- Reviews update guard: users can only modify `comment`, listeners only `listener_reply`.
+-- Also maintains updated_at / replied_at automatically.
+create or replace function public.guard_review_update()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.id <> old.id
+     or new.booking_id <> old.booking_id
+     or new.user_id <> old.user_id
+     or new.listener_id <> old.listener_id
+     or new.created_at <> old.created_at then
+    raise exception 'reviews: cannot modify identifying fields';
+  end if;
+
+  if auth.uid() = old.user_id and auth.uid() <> old.listener_id then
+    if new.listener_reply is distinct from old.listener_reply then
+      raise exception 'reviews: only the listener can change listener_reply';
+    end if;
+  elsif auth.uid() = old.listener_id and auth.uid() <> old.user_id then
+    if new.comment is distinct from old.comment then
+      raise exception 'reviews: only the reviewer can change comment';
+    end if;
+  end if;
+
+  new.updated_at := now();
+  if new.listener_reply is distinct from old.listener_reply then
+    new.replied_at := case when new.listener_reply is null then null else now() end;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists reviews_guard_update on public.reviews;
+create trigger reviews_guard_update
+  before update on public.reviews
+  for each row execute function public.guard_review_update();
+
 -- =====================================================================
 -- Row Level Security
 -- =====================================================================
@@ -116,6 +173,7 @@ alter table public.profiles    enable row level security;
 alter table public.time_slots  enable row level security;
 alter table public.bookings    enable row level security;
 alter table public.messages    enable row level security;
+alter table public.reviews     enable row level security;
 alter table public.stats       enable row level security;
 
 -- Profiles
@@ -224,6 +282,47 @@ create policy "messages: parties write"
        where user_id = auth.uid() or listener_id = auth.uid()
     )
   );
+
+-- Reviews
+-- Anyone authenticated can read reviews (browsing listeners before booking).
+drop policy if exists "reviews: read all auth" on public.reviews;
+create policy "reviews: read all auth"
+  on public.reviews for select to authenticated
+  using (true);
+
+-- The reviewer (user) may create a review for their own completed booking.
+drop policy if exists "reviews: reviewer inserts own" on public.reviews;
+create policy "reviews: reviewer inserts own"
+  on public.reviews for insert to authenticated
+  with check (
+    user_id = auth.uid()
+    and exists (
+      select 1 from public.bookings b
+       where b.id = booking_id
+         and b.user_id = auth.uid()
+         and b.listener_id = reviews.listener_id
+         and b.status = 'completed'
+    )
+  );
+
+-- Reviewer can edit/delete their own review; listener can edit replies on reviews about them.
+-- The before-update trigger restricts which columns each party may change.
+drop policy if exists "reviews: reviewer updates own" on public.reviews;
+create policy "reviews: reviewer updates own"
+  on public.reviews for update to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+drop policy if exists "reviews: listener replies" on public.reviews;
+create policy "reviews: listener replies"
+  on public.reviews for update to authenticated
+  using (listener_id = auth.uid())
+  with check (listener_id = auth.uid());
+
+drop policy if exists "reviews: reviewer deletes own" on public.reviews;
+create policy "reviews: reviewer deletes own"
+  on public.reviews for delete to authenticated
+  using (user_id = auth.uid());
 
 -- Stats: read-only public counter
 drop policy if exists "stats: public read" on public.stats;
