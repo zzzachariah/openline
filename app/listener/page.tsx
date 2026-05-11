@@ -314,6 +314,22 @@ function AddSlotModal({
       return;
     }
 
+    // Pre-check: this listener cannot have a slot that overlaps an existing one.
+    // The DB also enforces this via an exclusion constraint, so this is just to
+    // surface a friendlier error before round-tripping.
+    const { data: overlapping } = await supabase
+      .from("time_slots")
+      .select("id")
+      .eq("listener_id", auth.user.id)
+      .lt("start_time", end.toISOString())
+      .gt("end_time", start.toISOString())
+      .limit(1);
+    if (overlapping && overlapping.length > 0) {
+      setError("这个时段和你已有的时段重叠了");
+      setSubmitting(false);
+      return;
+    }
+
     const { error: insertErr } = await supabase.from("time_slots").insert({
       listener_id: auth.user.id,
       start_time: start.toISOString(),
@@ -321,7 +337,12 @@ function AddSlotModal({
       is_booked: false,
     });
     if (insertErr) {
-      setError("创建失败，请稍后再试");
+      // 23P01 = exclusion_violation (overlap caught by the DB constraint)
+      if (insertErr.code === "23P01") {
+        setError("这个时段和你已有的时段重叠了");
+      } else {
+        setError("创建失败，请稍后再试");
+      }
       setSubmitting(false);
       return;
     }
