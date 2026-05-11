@@ -75,41 +75,60 @@ export default function ListenerPage() {
         router.push("/login?redirect=/listener");
         return;
       }
-      return;
-    }
-    setUsername(profile.username);
+      const userId = authRes.data.user.id;
 
-    const nowIso = new Date().toISOString();
-    const { data: slotRows } = await supabase
-      .from("time_slots")
-      .select("id, start_time, end_time, is_booked")
-      .eq("listener_id", auth.user.id)
-      .gte("end_time", nowIso)
-      .order("start_time", { ascending: true });
-    setSlots(slotRows || []);
+      const profileRes = await withTimeout(
+        supabase
+          .from("profiles")
+          .select("username, is_listener, listener_application_at")
+          .eq("id", userId)
+          .single(),
+        QUERY_TIMEOUT_MS,
+        "获取资料超时，请检查网络后重试"
+      );
+      const profile = profileRes.data;
+      if (!profile?.is_listener) {
+        if (profile?.listener_application_at) {
+          router.push("/listener/pending");
+        } else {
+          router.push("/me");
+        }
+        return;
+      }
+      setUsername(profile.username);
 
-    const { data: bookingRows } = await supabase
-      .from("bookings")
-      .select(
-        "id, format, status, is_saved, user:profiles!bookings_user_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
-      )
-      .eq("listener_id", auth.user.id)
-      .order("created_at", { ascending: false });
-    if (bookingRows) {
-      const mapped: BookingCardData[] = (bookingRows as RawBooking[]).map((r) => {
-        const user = Array.isArray(r.user) ? r.user[0] : r.user;
-        const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
-        return {
-          id: r.id,
-          format: r.format,
-          status: r.status,
-          counterpartyUsername: user.username,
-          startTime: slot.start_time,
-          endTime: slot.end_time,
-          isSaved: !!r.is_saved,
-        };
-      });
-      setBookings(mapped);
+      const nowIso = new Date().toISOString();
+      const { data: slotRows } = await supabase
+        .from("time_slots")
+        .select("id, start_time, end_time, is_booked")
+        .eq("listener_id", userId)
+        .gte("end_time", nowIso)
+        .order("start_time", { ascending: true });
+      setSlots(slotRows || []);
+
+      const { data: bookingRows } = await supabase
+        .from("bookings")
+        .select(
+          "id, format, status, is_saved, user:profiles!bookings_user_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
+        )
+        .eq("listener_id", userId)
+        .order("created_at", { ascending: false });
+      if (bookingRows) {
+        const mapped: BookingCardData[] = (bookingRows as RawBooking[]).map((r) => {
+          const user = Array.isArray(r.user) ? r.user[0] : r.user;
+          const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
+          return {
+            id: r.id,
+            format: r.format,
+            status: r.status,
+            counterpartyUsername: user.username,
+            startTime: slot.start_time,
+            endTime: slot.end_time,
+            isSaved: !!r.is_saved,
+          };
+        });
+        setBookings(mapped);
+      }
     } catch (err) {
       console.error("listener dashboard load failed", err);
       setLoadError(describeError(err));
