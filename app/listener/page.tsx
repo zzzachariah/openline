@@ -6,6 +6,7 @@ import { Plus, X } from "lucide-react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import BookingCard, { BookingCardData } from "@/components/BookingCard";
+import ReviewPanel, { Review } from "@/components/ReviewPanel";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { formatDayHeader, formatDayKey, formatTime, formatTimeRange } from "@/lib/format";
 
@@ -18,6 +19,8 @@ type Slot = {
 
 type RawBooking = {
   id: string;
+  user_id: string;
+  listener_id: string;
   format: "text" | "voice";
   status: "upcoming" | "completed" | "cancelled";
   user: { username: string } | { username: string }[];
@@ -32,6 +35,7 @@ export default function ListenerPage() {
   const [username, setUsername] = useState<string | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [bookings, setBookings] = useState<BookingCardData[]>([]);
+  const [reviews, setReviews] = useState<Record<string, Review>>({});
   const [tab, setTab] = useState<SectionTab>("slots");
   const [showAdd, setShowAdd] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -75,7 +79,7 @@ export default function ListenerPage() {
     const { data: bookingRows } = await supabase
       .from("bookings")
       .select(
-        "id, format, status, user:profiles!bookings_user_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
+        "id, user_id, listener_id, format, status, user:profiles!bookings_user_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
       )
       .eq("listener_id", auth.user.id)
       .order("created_at", { ascending: false });
@@ -85,6 +89,8 @@ export default function ListenerPage() {
         const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
         return {
           id: r.id,
+          userId: r.user_id,
+          listenerId: r.listener_id,
           format: r.format,
           status: r.status,
           counterpartyUsername: user.username,
@@ -92,7 +98,31 @@ export default function ListenerPage() {
           endTime: slot.end_time,
         };
       });
+
+      const nowMs = Date.now();
+      const expiredIds = mapped
+        .filter((b) => b.status === "upcoming" && new Date(b.endTime).getTime() < nowMs)
+        .map((b) => b.id);
+      if (expiredIds.length) {
+        supabase.from("bookings").update({ status: "completed" }).in("id", expiredIds);
+        for (const b of mapped) {
+          if (expiredIds.includes(b.id)) b.status = "completed";
+        }
+      }
       setBookings(mapped);
+
+      const completedIds = mapped.filter((b) => b.status === "completed").map((b) => b.id);
+      if (completedIds.length) {
+        const { data: rv } = await supabase
+          .from("reviews")
+          .select("*")
+          .in("booking_id", completedIds);
+        if (rv) {
+          const byId: Record<string, Review> = {};
+          for (const r of rv as Review[]) byId[r.booking_id] = r;
+          setReviews(byId);
+        }
+      }
     }
     setLoading(false);
   }
@@ -133,7 +163,20 @@ export default function ListenerPage() {
           ) : tab === "slots" ? (
             <SlotsSection slots={slots} onAdd={() => setShowAdd(true)} onDelete={deleteSlot} />
           ) : (
-            <BookingsSection bookings={bookings} now={now} onCancel={() => reload()} />
+            <BookingsSection
+              bookings={bookings}
+              now={now}
+              reviews={reviews}
+              onReviewChange={(bookingId, r) =>
+                setReviews((prev) => {
+                  const next = { ...prev };
+                  if (r) next[bookingId] = r;
+                  else delete next[bookingId];
+                  return next;
+                })
+              }
+              onCancel={() => reload()}
+            />
           )}
         </div>
       </main>
@@ -247,10 +290,14 @@ function SlotsSection({
 function BookingsSection({
   bookings,
   now,
+  reviews,
+  onReviewChange,
   onCancel,
 }: {
   bookings: BookingCardData[];
   now: number;
+  reviews: Record<string, Review>;
+  onReviewChange: (bookingId: string, r: Review | null) => void;
   onCancel: () => void;
 }) {
   if (bookings.length === 0) {
@@ -263,7 +310,19 @@ function BookingsSection({
   return (
     <div className="space-y-3">
       {bookings.map((b) => (
-        <BookingCard key={b.id} booking={b} now={now} role="listener" onCancel={onCancel} />
+        <div key={b.id} className="space-y-2">
+          <BookingCard booking={b} now={now} role="listener" onCancel={onCancel} />
+          {b.status === "completed" && (
+            <ReviewPanel
+              bookingId={b.id}
+              userId={b.userId}
+              listenerId={b.listenerId}
+              role="listener"
+              initialReview={reviews[b.id] ?? null}
+              onReviewChange={(r) => onReviewChange(b.id, r)}
+            />
+          )}
+        </div>
       ))}
     </div>
   );

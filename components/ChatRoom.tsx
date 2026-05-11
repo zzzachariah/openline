@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Send, Copy, Check, ChevronDown } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { formatTime } from "@/lib/format";
+import ReviewPanel, { Review } from "./ReviewPanel";
 
 type Message = {
   id: string;
@@ -44,6 +45,7 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
   const [meetingCode, setMeetingCode] = useState("");
   const [resourcesOpen, setResourcesOpen] = useState(false);
   const [endingSent, setEndingSent] = useState(false);
+  const [review, setReview] = useState<Review | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -117,6 +119,13 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
         .eq("booking_id", bookingId)
         .order("created_at", { ascending: true });
       if (!cancelled && msgs) setMessages(msgs as Message[]);
+
+      const { data: rv } = await supabase
+        .from("reviews")
+        .select("*")
+        .eq("booking_id", bookingId)
+        .maybeSingle();
+      if (!cancelled && rv) setReview(rv as Review);
 
       setLoading(false);
     }
@@ -269,6 +278,11 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
       {sessionEnded ? (
         <EndedScreen
           role={role}
+          bookingId={booking.id}
+          userId={booking.user_id}
+          listenerId={booking.listener_id}
+          review={review}
+          onReviewChange={setReview}
           resourcesOpen={resourcesOpen}
           setResourcesOpen={setResourcesOpen}
         />
@@ -451,19 +465,39 @@ function groupMessages(messages: Message[]): Group[] {
 
 function EndedScreen({
   role,
+  bookingId,
+  userId,
+  listenerId,
+  review,
+  onReviewChange,
   resourcesOpen,
   setResourcesOpen,
 }: {
   role: "user" | "listener";
+  bookingId: string;
+  userId: string;
+  listenerId: string;
+  review: Review | null;
+  onReviewChange: (r: Review | null) => void;
   resourcesOpen: boolean;
   setResourcesOpen: (v: boolean) => void;
 }) {
   return (
-    <div className="flex-1 flex items-center justify-center px-6">
-      <div className="max-w-prose w-full py-12">
+    <div className="flex-1 overflow-y-auto px-6">
+      <div className="max-w-prose mx-auto w-full py-12">
         <p className="text-h2 font-medium tracking-tight text-center mb-10">
           这次倾诉结束了。
         </p>
+        <div className="mb-10">
+          <ReviewPanel
+            bookingId={bookingId}
+            userId={userId}
+            listenerId={listenerId}
+            role={role}
+            initialReview={review}
+            onReviewChange={onReviewChange}
+          />
+        </div>
         <p className="text-[15px] text-foreground/85 leading-relaxed text-center mb-6">
           如果今天聊的内容让你觉得有些事情可能需要更专业的帮助，
         </p>

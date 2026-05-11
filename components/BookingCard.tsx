@@ -5,6 +5,8 @@ import { formatDate, formatTimeRange, formatCountdown } from "@/lib/format";
 
 export type BookingCardData = {
   id: string;
+  userId: string;
+  listenerId: string;
   format: "text" | "voice";
   status: "upcoming" | "completed" | "cancelled";
   counterpartyUsername: string;
@@ -28,7 +30,9 @@ export default function BookingCard({ booking, now, role, onCancel }: Props) {
   const oneHourBeforeStart = startTs - 60 * 60 * 1000;
 
   const inWindow = now >= fiveMinBeforeStart && now <= endTs;
-  const cancellable = booking.status === "upcoming" && now < oneHourBeforeStart;
+  const effectiveStatus: BookingCardData["status"] =
+    booking.status === "upcoming" && now > endTs ? "completed" : booking.status;
+  const cancellable = effectiveStatus === "upcoming" && now < oneHourBeforeStart;
   const chatUrl = role === "user" ? `/chat/${booking.id}` : `/listener/chat/${booking.id}`;
 
   return (
@@ -45,29 +49,29 @@ export default function BookingCard({ booking, now, role, onCancel }: Props) {
             {booking.format === "text" ? "文字" : "语音"}
           </span>
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] border border-border text-muted">
-            {booking.status === "upcoming"
+            {effectiveStatus === "upcoming"
               ? "即将开始"
-              : booking.status === "completed"
+              : effectiveStatus === "completed"
               ? "已完成"
               : "已取消"}
           </span>
         </div>
-        {booking.status === "upcoming" && !inWindow && (
+        {effectiveStatus === "upcoming" && !inWindow && (
           <div className="text-caption text-muted pt-1">{formatCountdown(startTs - now)}</div>
         )}
       </div>
       <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">
-        {booking.status === "upcoming" && inWindow && (
+        {effectiveStatus === "upcoming" && inWindow && (
           <Link href={chatUrl} className="btn-primary">
             进入聊天室
           </Link>
         )}
-        {booking.status === "completed" && (
+        {effectiveStatus === "completed" && (
           <Link href={chatUrl} className="btn-secondary">
             查看
           </Link>
         )}
-        {booking.status === "upcoming" && cancellable && onCancel && (
+        {effectiveStatus === "upcoming" && cancellable && onCancel && (
           <button
             onClick={onCancel}
             className="text-[13px] text-muted hover:text-danger transition-colors"

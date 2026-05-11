@@ -7,12 +7,15 @@ import { Copy, Check } from "lucide-react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import BookingCard, { BookingCardData } from "@/components/BookingCard";
+import ReviewPanel, { Review } from "@/components/ReviewPanel";
 import { createBrowserClient } from "@/lib/supabase/client";
 
 type Tab = "upcoming" | "completed" | "cancelled";
 
 type RawBooking = {
   id: string;
+  user_id: string;
+  listener_id: string;
   format: "text" | "voice";
   status: "upcoming" | "completed" | "cancelled";
   listener: { username: string } | { username: string }[];
@@ -24,6 +27,7 @@ export default function MePage() {
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState<string | null>(null);
   const [bookings, setBookings] = useState<BookingCardData[]>([]);
+  const [reviews, setReviews] = useState<Record<string, Review>>({});
   const [tab, setTab] = useState<Tab>("upcoming");
   const [copied, setCopied] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -58,7 +62,7 @@ export default function MePage() {
       const { data: rows } = await supabase
         .from("bookings")
         .select(
-          "id, format, status, listener:profiles!bookings_listener_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
+          "id, user_id, listener_id, format, status, listener:profiles!bookings_listener_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
         )
         .eq("user_id", auth.user.id)
         .order("created_at", { ascending: false });
@@ -69,6 +73,8 @@ export default function MePage() {
           const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
           return {
             id: r.id,
+            userId: r.user_id,
+            listenerId: r.listener_id,
             format: r.format,
             status: r.status,
             counterpartyUsername: listener.username,
@@ -76,7 +82,34 @@ export default function MePage() {
             endTime: slot.end_time,
           };
         });
+
+        const nowMs = Date.now();
+        const expiredIds = mapped
+          .filter((b) => b.status === "upcoming" && new Date(b.endTime).getTime() < nowMs)
+          .map((b) => b.id);
+        if (expiredIds.length) {
+          supabase
+            .from("bookings")
+            .update({ status: "completed" })
+            .in("id", expiredIds);
+          for (const b of mapped) {
+            if (expiredIds.includes(b.id)) b.status = "completed";
+          }
+        }
         setBookings(mapped);
+
+        const completedIds = mapped.filter((b) => b.status === "completed").map((b) => b.id);
+        if (completedIds.length) {
+          const { data: rv } = await supabase
+            .from("reviews")
+            .select("*")
+            .in("booking_id", completedIds);
+          if (!cancelled && rv) {
+            const byId: Record<string, Review> = {};
+            for (const r of rv as Review[]) byId[r.booking_id] = r;
+            setReviews(byId);
+          }
+        }
       }
       setLoading(false);
     }
@@ -194,13 +227,31 @@ export default function MePage() {
               ) : (
                 <div className="space-y-3">
                   {filtered.map((b) => (
-                    <BookingCard
-                      key={b.id}
-                      booking={b}
-                      now={now}
-                      role="user"
-                      onCancel={() => cancelBooking(b.id)}
-                    />
+                    <div key={b.id} className="space-y-2">
+                      <BookingCard
+                        booking={b}
+                        now={now}
+                        role="user"
+                        onCancel={() => cancelBooking(b.id)}
+                      />
+                      {b.status === "completed" && (
+                        <ReviewPanel
+                          bookingId={b.id}
+                          userId={b.userId}
+                          listenerId={b.listenerId}
+                          role="user"
+                          initialReview={reviews[b.id] ?? null}
+                          onReviewChange={(r) =>
+                            setReviews((prev) => {
+                              const next = { ...prev };
+                              if (r) next[b.id] = r;
+                              else delete next[b.id];
+                              return next;
+                            })
+                          }
+                        />
+                      )}
+                    </div>
                   ))}
                 </div>
               )}

@@ -250,6 +250,69 @@ create index if not exists profiles_pending_listener_idx
   where listener_application_at is not null and is_listener = false;
 
 -- =====================================================================
+-- Reviews (post-conversation feedback)
+-- =====================================================================
+
+create table if not exists public.reviews (
+  id           uuid primary key default gen_random_uuid(),
+  booking_id   uuid not null unique references public.bookings(id) on delete cascade,
+  user_id      uuid not null references public.profiles(id) on delete cascade,
+  listener_id  uuid not null references public.profiles(id) on delete cascade,
+  content      text not null check (char_length(content) between 1 and 1000),
+  is_public    boolean not null default false,
+  reply        text check (reply is null or char_length(reply) between 1 and 1000),
+  created_at   timestamptz not null default now(),
+  replied_at   timestamptz
+);
+
+create index if not exists reviews_listener_idx on public.reviews(listener_id, created_at desc);
+create index if not exists reviews_user_idx     on public.reviews(user_id);
+create index if not exists reviews_public_idx   on public.reviews(listener_id, created_at desc)
+  where is_public = true;
+
+alter table public.reviews enable row level security;
+
+-- The two parties of a booking can read their own review (public or not)
+drop policy if exists "reviews: parties read" on public.reviews;
+create policy "reviews: parties read"
+  on public.reviews for select to authenticated
+  using (user_id = auth.uid() or listener_id = auth.uid());
+
+-- Any authenticated user can read reviews the author chose to make public
+drop policy if exists "reviews: public read" on public.reviews;
+create policy "reviews: public read"
+  on public.reviews for select to authenticated
+  using (is_public = true);
+
+-- A user can write exactly one review per completed booking they own
+drop policy if exists "reviews: user insert" on public.reviews;
+create policy "reviews: user insert"
+  on public.reviews for insert to authenticated
+  with check (
+    user_id = auth.uid()
+    and exists (
+      select 1 from public.bookings b
+       where b.id = reviews.booking_id
+         and b.user_id = auth.uid()
+         and b.listener_id = reviews.listener_id
+         and b.status = 'completed'
+    )
+  );
+
+-- A user can edit their own review (content + visibility)
+drop policy if exists "reviews: user updates own" on public.reviews;
+create policy "reviews: user updates own"
+  on public.reviews for update to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- A listener can update the reply on reviews directed at them
+-- (the client only sends reply + replied_at; column-level guard is enforced in app code)
+drop policy if exists "reviews: listener replies" on public.reviews;
+create policy "reviews: listener replies"
+  on public.reviews for update to authenticated
+  using (listener_id = auth.uid()) with check (listener_id = auth.uid());
+
+-- =====================================================================
 -- Optional: 7-day message auto-deletion (requires pg_cron extension)
 -- =====================================================================
 -- Run separately if you want auto-deletion. Uncomment after enabling pg_cron.
