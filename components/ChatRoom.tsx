@@ -57,9 +57,11 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
   useEffect(() => {
     let cancelled = false;
     const supabase = createBrowserClient();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    async function load() {
+    async function setup() {
       const { data: auth } = await supabase.auth.getUser();
+      if (cancelled) return;
       if (!auth.user) {
         router.push(`/login?redirect=${role === "listener" ? "/listener" : "/me"}`);
         return;
@@ -74,20 +76,17 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
         .eq("id", bookingId)
         .single();
 
+      if (cancelled) return;
       if (!b) {
-        if (!cancelled) {
-          setForbidden(true);
-          setLoading(false);
-        }
+        setForbidden(true);
+        setLoading(false);
         return;
       }
 
       const expectedRole = role === "user" ? b.user_id : b.listener_id;
       if (expectedRole !== auth.user.id) {
-        if (!cancelled) {
-          setForbidden(true);
-          setLoading(false);
-        }
+        setForbidden(true);
+        setLoading(false);
         return;
       }
 
@@ -116,31 +115,40 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
         .select("id, booking_id, sender_id, content, message_type, created_at")
         .eq("booking_id", bookingId)
         .order("created_at", { ascending: true });
-      if (!cancelled && msgs) setMessages(msgs as Message[]);
+      if (cancelled) return;
+      if (msgs) setMessages(msgs as Message[]);
 
       setLoading(false);
+
+      // Subscribe to realtime AFTER auth + initial fetch so the channel
+      // handshakes with the user's JWT and RLS evaluates correctly.
+      channel = supabase
+        .channel(`messages:${bookingId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "messages",
+            filter: `booking_id=eq.${bookingId}`,
+          },
+          (payload) => {
+            if (cancelled) return;
+            const m = payload.new as Message;
+            setMessages((prev) => {
+              if (prev.some((x) => x.id === m.id)) return prev;
+              return [...prev, m];
+            });
+          }
+        )
+        .subscribe();
     }
 
-    load();
-
-    const channel = supabase
-      .channel(`messages:${bookingId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages", filter: `booking_id=eq.${bookingId}` },
-        (payload) => {
-          const m = payload.new as Message;
-          setMessages((prev) => {
-            if (prev.some((x) => x.id === m.id)) return prev;
-            return [...prev, m];
-          });
-        }
-      )
-      .subscribe();
+    setup();
 
     return () => {
       cancelled = true;
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [bookingId, role, router]);
 
@@ -179,12 +187,28 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
     if (sessionEnded) return;
 
     const supabase = createBrowserClient();
-    await supabase.from("messages").insert({
-      booking_id: booking.id,
-      sender_id: me,
-      content: trimmed,
-      message_type: type,
-    });
+    const { data, error } = await supabase
+      .from("messages")
+      .insert({
+        booking_id: booking.id,
+        sender_id: me,
+        content: trimmed,
+        message_type: type,
+      })
+      .select("id, booking_id, sender_id, content, message_type, created_at")
+      .single();
+
+    if (error) {
+      console.error("Failed to send message:", error);
+      return;
+    }
+    if (data) {
+      const newMsg = data as Message;
+      setMessages((prev) => {
+        if (prev.some((x) => x.id === newMsg.id)) return prev;
+        return [...prev, newMsg];
+      });
+    }
   }
 
   async function handleSend() {
