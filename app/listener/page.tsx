@@ -3,9 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, X, CalendarDays, CalendarRange } from "lucide-react";
+import { Plus, X, CalendarDays, CalendarRange, AlertCircle } from "lucide-react";
 import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
 import BookingCard, { BookingCardData } from "@/components/BookingCard";
 import MonthCalendar, { DayMeta } from "@/components/Calendar/MonthCalendar";
 import WeekCalendar, { WeekSlot } from "@/components/Calendar/WeekCalendar";
@@ -168,7 +167,6 @@ export default function ListenerPage() {
     setSlots((prev) => prev.filter((s) => s.id !== id));
   }
 
-  // Aggregate slot meta per day for month view
   const monthMeta = useMemo<Record<string, DayMeta>>(() => {
     const map: Record<string, DayMeta> = {};
     for (const s of slots) {
@@ -180,7 +178,6 @@ export default function ListenerPage() {
     return map;
   }, [slots]);
 
-  // For week view, transform slots into WeekSlot[]
   const weekSlots = useMemo<WeekSlot[]>(
     () =>
       slots.map((s) => ({
@@ -192,7 +189,6 @@ export default function ListenerPage() {
     [slots]
   );
 
-  // Slots for the currently selected day (used by month view "下方时段列表")
   const slotsForSelectedDay = useMemo(
     () =>
       slots
@@ -209,19 +205,24 @@ export default function ListenerPage() {
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
-        <div className="max-w-5xl mx-auto px-6">
+      <main className="pt-16 h-[100dvh] flex flex-col overflow-hidden">
+        <div className="max-w-5xl w-full mx-auto px-6 pt-6 md:pt-8 pb-4 md:pb-6 flex-1 min-h-0 flex flex-col">
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, ease: [0.215, 0.61, 0.355, 1] }}
-            className="mb-10"
+            transition={{ duration: 0.45, ease: [0.215, 0.61, 0.355, 1] }}
+            className="mb-5 md:mb-6 shrink-0"
           >
             <h1 className="text-h2 font-medium tracking-tight">倾听者后台</h1>
-            <p className="text-caption text-muted mt-1">{username}</p>
+            <p className="text-caption text-muted mt-0.5">{username}</p>
           </motion.div>
 
-          <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.05, ease: [0.215, 0.61, 0.355, 1] }}
+            className="flex items-center justify-between mb-4 gap-3 flex-wrap shrink-0"
+          >
             <div className="flex gap-1 border-b border-border">
               <TabButton
                 active={tab === "calendar"}
@@ -238,7 +239,8 @@ export default function ListenerPage() {
             {tab === "calendar" && (
               <div className="flex items-center gap-2">
                 <ViewToggle view={view} onChange={setView} />
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
                   onClick={() => {
                     setPrefill(null);
                     setShowAdd(true);
@@ -247,60 +249,84 @@ export default function ListenerPage() {
                 >
                   <Plus size={14} />
                   添加时段
-                </button>
+                </motion.button>
               </div>
             )}
-          </div>
+          </motion.div>
 
-          {loading ? (
-            <div className="text-muted text-center py-12">载入中...</div>
-          ) : (
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={tab}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.24, ease: [0.215, 0.61, 0.355, 1] }}
+          {loadError && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="shrink-0 mb-4 flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-[13px] text-danger"
+            >
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <span>{loadError}</span>
+              <button
+                onClick={() => reload()}
+                className="ml-auto text-[13px] underline hover:opacity-80"
               >
-                {tab === "calendar" ? (
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={view}
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
-                      transition={{ duration: 0.22, ease: [0.215, 0.61, 0.355, 1] }}
-                    >
-                      {view === "month" ? (
-                        <MonthSection
-                          monthMeta={monthMeta}
-                          selectedDate={selectedDate}
-                          onSelect={setSelectedDate}
-                          slotsForSelectedDay={slotsForSelectedDay}
-                          onOpenAdd={openAddAt}
-                          onDelete={deleteSlot}
-                        />
-                      ) : (
-                        <WeekSection
-                          anchor={anchor}
-                          onAnchorChange={setAnchor}
-                          slots={weekSlots}
-                          onCreateAtHour={openAddAt}
-                          onDeleteSlot={deleteSlot}
-                        />
-                      )}
-                    </motion.div>
-                  </AnimatePresence>
-                ) : (
-                  <BookingsSection bookings={bookings} now={now} onCancel={() => reload()} />
-                )}
-              </motion.div>
-            </AnimatePresence>
+                重试
+              </button>
+            </motion.div>
           )}
+
+          <div className="flex-1 min-h-0 flex flex-col">
+            {loading ? (
+              <div className="text-muted text-center py-12">载入中...</div>
+            ) : (
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={tab}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.22, ease: [0.215, 0.61, 0.355, 1] }}
+                  className="flex-1 min-h-0 flex flex-col"
+                >
+                  {tab === "calendar" ? (
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={view}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.22, ease: [0.215, 0.61, 0.355, 1] }}
+                        className="flex-1 min-h-0 flex flex-col"
+                      >
+                        {view === "month" ? (
+                          <MonthSection
+                            monthMeta={monthMeta}
+                            selectedDate={selectedDate}
+                            onSelect={setSelectedDate}
+                            slotsForSelectedDay={slotsForSelectedDay}
+                            onOpenAdd={openAddAt}
+                            onDelete={deleteSlot}
+                          />
+                        ) : (
+                          <WeekSection
+                            anchor={anchor}
+                            onAnchorChange={setAnchor}
+                            slots={weekSlots}
+                            onCreateAtHour={openAddAt}
+                            onDeleteSlot={deleteSlot}
+                          />
+                        )}
+                      </motion.div>
+                    </AnimatePresence>
+                  ) : (
+                    <BookingsSection
+                      bookings={bookings}
+                      now={now}
+                      onCancel={() => reload()}
+                    />
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            )}
+          </div>
         </div>
       </main>
-      <Footer />
 
       <AnimatePresence>
         {showAdd && (
@@ -402,8 +428,13 @@ function MonthSection({
   onDelete: (id: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr] gap-6">
-      <div className="card p-5">
+    <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr] gap-4 md:gap-6 flex-1 min-h-0 overflow-y-auto md:overflow-visible">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.32, ease: [0.215, 0.61, 0.355, 1] }}
+        className="card p-4 md:p-5 flex flex-col min-h-0 md:overflow-y-auto"
+      >
         <MonthCalendar
           value={selectedDate}
           onChange={onSelect}
@@ -411,7 +442,7 @@ function MonthSection({
           hoverAddable
           onHoverAdd={onOpenAdd}
         />
-        <p className="mt-4 text-caption text-muted flex items-center gap-3">
+        <p className="mt-4 text-caption text-muted flex flex-wrap items-center gap-x-3 gap-y-1 shrink-0">
           <span className="inline-flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-accent" /> 可预约
           </span>
@@ -420,77 +451,90 @@ function MonthSection({
           </span>
           <span className="text-muted/70">悬停日期可快速添加</span>
         </p>
-      </div>
+      </motion.div>
 
-      <div className="card p-5">
-        <div className="flex items-center justify-between mb-4">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.32, delay: 0.05, ease: [0.215, 0.61, 0.355, 1] }}
+        className="card p-4 md:p-5 flex flex-col min-h-0"
+      >
+        <div className="flex items-center justify-between mb-4 shrink-0">
           <h3 className="text-[15px] font-medium">
             {selectedDate.getMonth() + 1} 月 {selectedDate.getDate()} 日
           </h3>
-          <button
+          <motion.button
+            whileTap={{ scale: 0.95 }}
             onClick={() => onOpenAdd(selectedDate)}
             className="text-[13px] text-accent inline-flex items-center gap-1 hover:opacity-80 transition-opacity"
           >
             <Plus size={12} />
             添加
-          </button>
+          </motion.button>
         </div>
 
-        <AnimatePresence mode="popLayout">
-          {slotsForSelectedDay.length === 0 ? (
-            <motion.div
-              key="empty"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="text-caption text-muted text-center py-8"
-            >
-              这一天还没有时段。
-            </motion.div>
-          ) : (
-            <motion.ul
-              key="list"
-              className="space-y-2"
-              initial="hidden"
-              animate="show"
-              variants={{
-                show: { transition: { staggerChildren: 0.04 } },
-              }}
-            >
-              {slotsForSelectedDay.map((s) => (
-                <motion.li
-                  key={s.id}
-                  layout
-                  variants={{
-                    hidden: { opacity: 0, y: 6 },
-                    show: { opacity: 1, y: 0 },
-                  }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.2, ease: [0.215, 0.61, 0.355, 1] }}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5 bg-surface"
-                >
-                  <div>
-                    <div className="text-[14px] font-medium tabular-nums">
-                      {formatTimeRange(s._start, new Date(s.end_time))}
+        <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">
+          <AnimatePresence mode="popLayout">
+            {slotsForSelectedDay.length === 0 ? (
+              <motion.div
+                key="empty"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-caption text-muted text-center py-8"
+              >
+                这一天还没有时段。
+              </motion.div>
+            ) : (
+              <motion.ul
+                key="list"
+                className="space-y-2"
+                initial="hidden"
+                animate="show"
+                variants={{
+                  show: { transition: { staggerChildren: 0.04 } },
+                }}
+              >
+                {slotsForSelectedDay.map((s) => (
+                  <motion.li
+                    key={s.id}
+                    layout
+                    variants={{
+                      hidden: { opacity: 0, y: 6 },
+                      show: { opacity: 1, y: 0 },
+                    }}
+                    exit={{ opacity: 0, y: -4 }}
+                    whileHover={{ y: -1 }}
+                    transition={{
+                      layout: { type: "spring", stiffness: 360, damping: 30 },
+                      duration: 0.2,
+                      ease: [0.215, 0.61, 0.355, 1],
+                    }}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5 bg-surface hover:border-accent/40 transition-colors"
+                  >
+                    <div>
+                      <div className="text-[14px] font-medium tabular-nums">
+                        {formatTimeRange(s._start, new Date(s.end_time))}
+                      </div>
+                      <div className="text-caption text-muted">
+                        {s.is_booked ? "已被预约" : "可预约"}
+                      </div>
                     </div>
-                    <div className="text-caption text-muted">
-                      {s.is_booked ? "已被预约" : "可预约"}
-                    </div>
-                  </div>
-                  {!s.is_booked && (
-                    <button
-                      onClick={() => onDelete(s.id)}
-                      className="text-[13px] text-muted hover:text-danger transition-colors"
-                    >
-                      删除
-                    </button>
-                  )}
-                </motion.li>
-              ))}
-            </motion.ul>
-          )}
-        </AnimatePresence>
-      </div>
+                    {!s.is_booked && (
+                      <button
+                        onClick={() => onDelete(s.id)}
+                        className="text-[13px] text-muted hover:text-danger transition-colors"
+                      >
+                        删除
+                      </button>
+                    )}
+                  </motion.li>
+                ))}
+              </motion.ul>
+            )}
+          </AnimatePresence>
+        </div>
+      </motion.div>
     </div>
   );
 }
@@ -509,18 +553,24 @@ function WeekSection({
   onDeleteSlot: (id: string) => void;
 }) {
   return (
-    <div className="card p-5">
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.32, ease: [0.215, 0.61, 0.355, 1] }}
+      className="card p-4 md:p-5 flex-1 min-h-0 flex flex-col"
+    >
       <WeekCalendar
+        className="flex-1 min-h-0"
         anchor={anchor}
         onAnchorChange={onAnchorChange}
         slots={slots}
         onCreateAtHour={onCreateAtHour}
         onDeleteSlot={onDeleteSlot}
       />
-      <p className="mt-4 text-caption text-muted">
-        悬停空白方格即可添加 40 分钟时段。绿色为可预约，灰色为已被预约。
+      <p className="mt-3 text-caption text-muted shrink-0">
+        悬停空白方格添加 40 分钟时段 · <span className="text-accent">绿色</span>=可预约 · 灰色=已被预约
       </p>
-    </div>
+    </motion.div>
   );
 }
 
@@ -542,7 +592,7 @@ function BookingsSection({
   }
   return (
     <motion.div
-      className="space-y-3"
+      className="space-y-3 flex-1 min-h-0 overflow-y-auto -mx-1 px-1 pb-2"
       initial="hidden"
       animate="show"
       variants={{ show: { transition: { staggerChildren: 0.05 } } }}
@@ -652,11 +702,11 @@ function AddSlotModal({
         onClick={() => !submitting && onClose()}
       />
       <motion.div
-        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        initial={{ opacity: 0, scale: 0.94, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.97, y: 4 }}
-        transition={{ duration: 0.22, ease: [0.215, 0.61, 0.355, 1] }}
-        className="relative bg-surface border border-border rounded-xl p-7 w-full max-w-[440px] shadow-lg"
+        exit={{ opacity: 0, scale: 0.96, y: 6 }}
+        transition={{ type: "spring", stiffness: 320, damping: 28 }}
+        className="relative bg-surface border border-border rounded-xl p-7 w-full max-w-[440px] shadow-xl"
       >
         <button
           onClick={() => !submitting && onClose()}
