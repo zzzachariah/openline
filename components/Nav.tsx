@@ -94,7 +94,7 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
         showSolid ? "nav-solid" : "bg-transparent"
       }`}
     >
-      <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
         <Link href="/" className="nav-logo">
           <span className="nav-logo-mark text-accent">
             <Logo size={26} />
@@ -219,6 +219,7 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
             className="nav-icon-btn"
             onClick={() => setMenuOpen((v) => !v)}
             aria-label="菜单"
+            aria-expanded={menuOpen}
           >
             {menuOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
@@ -226,83 +227,105 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
       </div>
 
       {menuOpen && (
-        <div className="md:hidden border-t border-border bg-background nav-dropdown">
-          <div className="px-6 py-4 flex flex-col gap-1">
-            <Link
-              href="/"
-              onClick={() => setMenuOpen(false)}
-              className="nav-dropdown-item rounded-md"
-              data-active={isActive("/")}
-            >
-              介绍
-            </Link>
-            {!user && (
-              <>
-                <Link
-                  href="/book"
-                  onClick={() => setMenuOpen(false)}
-                  className="nav-dropdown-item rounded-md"
-                >
-                  预约
-                </Link>
-                <Link
-                  href="/login"
-                  onClick={() => setMenuOpen(false)}
-                  className="nav-dropdown-item rounded-md"
-                >
-                  登录
-                </Link>
-              </>
-            )}
-            {user && !user.is_listener && !user.listener_application_at && (
-              <>
-                <Link
-                  href="/book"
-                  onClick={() => setMenuOpen(false)}
-                  className="nav-dropdown-item rounded-md"
-                >
-                  预约
-                </Link>
-                <Link
-                  href="/me"
-                  onClick={() => setMenuOpen(false)}
-                  className="nav-dropdown-item rounded-md"
-                >
-                  我的预约
-                </Link>
-              </>
-            )}
-            {user && !user.is_listener && user.listener_application_at && (
+        <>
+          <div
+            className="md:hidden fixed inset-0 top-14 z-10 bg-background/60 backdrop-blur-sm"
+            onClick={() => setMenuOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="md:hidden relative z-20 border-t border-border bg-background nav-dropdown shadow-sm">
+            <div className="px-4 py-3 flex flex-col gap-1">
+              {user && (
+                <div className="px-3 pb-3 mb-1 border-b border-border">
+                  <div className="text-caption text-muted">已登录</div>
+                  <div className="text-[15px] font-medium tracking-tight truncate">
+                    {user.username}
+                  </div>
+                </div>
+              )}
               <Link
-                href="/listener/pending"
+                href="/"
                 onClick={() => setMenuOpen(false)}
                 className="nav-dropdown-item rounded-md"
+                data-active={isActive("/")}
               >
-                申请审核中
+                介绍
               </Link>
-            )}
-            {user && user.is_listener && (
-              <Link
-                href="/listener"
-                onClick={() => setMenuOpen(false)}
-                className="nav-dropdown-item rounded-md"
-              >
-                倾听者后台
-              </Link>
-            )}
-            {user && (
-              <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  logout();
-                }}
-                className="nav-dropdown-item rounded-md text-muted"
-              >
-                退出
-              </button>
-            )}
+              {!user && (
+                <>
+                  <Link
+                    href="/book"
+                    onClick={() => setMenuOpen(false)}
+                    className="nav-dropdown-item rounded-md"
+                  >
+                    预约
+                  </Link>
+                  <Link
+                    href="/login"
+                    onClick={() => setMenuOpen(false)}
+                    className="nav-dropdown-item rounded-md"
+                  >
+                    登录
+                  </Link>
+                  <Link
+                    href="/listener/signup"
+                    onClick={() => setMenuOpen(false)}
+                    className="nav-dropdown-item rounded-md"
+                  >
+                    申请成为倾听者
+                  </Link>
+                </>
+              )}
+              {user && !user.is_listener && !user.listener_application_at && (
+                <>
+                  <Link
+                    href="/book"
+                    onClick={() => setMenuOpen(false)}
+                    className="nav-dropdown-item rounded-md"
+                  >
+                    预约
+                  </Link>
+                  <Link
+                    href="/me"
+                    onClick={() => setMenuOpen(false)}
+                    className="nav-dropdown-item rounded-md"
+                  >
+                    我的预约
+                  </Link>
+                </>
+              )}
+              {user && !user.is_listener && user.listener_application_at && (
+                <Link
+                  href="/listener/pending"
+                  onClick={() => setMenuOpen(false)}
+                  className="nav-dropdown-item rounded-md"
+                >
+                  申请审核中
+                </Link>
+              )}
+              {user && user.is_listener && (
+                <Link
+                  href="/listener"
+                  onClick={() => setMenuOpen(false)}
+                  className="nav-dropdown-item rounded-md"
+                >
+                  倾听者后台
+                </Link>
+              )}
+              {user && (
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    logout();
+                  }}
+                  className="nav-dropdown-item rounded-md text-muted"
+                >
+                  退出
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </nav>
   );

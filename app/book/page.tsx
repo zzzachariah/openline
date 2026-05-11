@@ -254,7 +254,7 @@ export default function BookPage() {
     return (
       <>
         <Nav />
-        <main className="pt-24 pb-16 min-h-screen">
+        <main className="pt-20 sm:pt-24 pb-16 min-h-screen">
           <div className="text-muted text-center py-12">载入中...</div>
         </main>
       </>
@@ -266,9 +266,9 @@ export default function BookPage() {
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
-        <div className="max-w-[960px] mx-auto px-6">
-          <h1 className="text-h2 font-medium tracking-tight mb-2">选择一个时段</h1>
+      <main className="pt-20 sm:pt-24 pb-16 min-h-screen">
+        <div className="max-w-[960px] mx-auto px-5 sm:px-6">
+          <h1 className="text-h2-mobile sm:text-h2 font-medium tracking-tight mb-2">选择一个时段</h1>
           <p className="text-caption text-muted mb-8">
             倾诉是 40 分钟。选好时段后，时间到了你和倾听者会进入聊天室。
           </p>
@@ -629,18 +629,18 @@ function RouletteModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:px-4">
       <div className="absolute inset-0 bg-black/30" onClick={() => !submitting && onClose()} />
-      <div className="relative bg-surface border border-border rounded-xl p-7 w-full max-w-[440px]">
+      <div className="relative modal-card w-full max-w-[440px] rounded-b-none sm:rounded-xl pb-safe">
         <button
           onClick={() => !submitting && onClose()}
-          className="absolute top-4 right-4 text-muted hover:text-foreground"
+          className="absolute top-3 right-3 sm:top-4 sm:right-4 inline-flex items-center justify-center w-10 h-10 text-muted hover:text-foreground"
           aria-label="关闭"
         >
           <X size={18} />
         </button>
 
-        <div className="text-center mb-1">
+        <div className="text-center mb-1 pr-8">
           <h3 className="text-[18px] font-medium">为你随机匹配一位倾听者</h3>
           <p className="text-caption text-muted mt-1.5">
             {formatDayHeader(new Date(group.startTime))} ·{" "}

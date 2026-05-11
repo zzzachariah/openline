@@ -1,8 +1,9 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Noto_Sans_SC } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import SWRProvider from "@/components/SWRProvider";
+import MobileTabBar from "@/components/MobileTabBar";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -36,6 +37,17 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F7F3EC" },
+    { media: "(prefers-color-scheme: dark)", color: "#1A1F1D" },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -46,6 +58,7 @@ export default function RootLayout({
       <body>
         <ThemeProvider>
           <SWRProvider>{children}</SWRProvider>
+          <MobileTabBar />
         </ThemeProvider>
       </body>
     </html>

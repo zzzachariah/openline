@@ -50,17 +50,22 @@ export default function BookingCard({
   const pastRetention =
     booking.status === "completed" && !booking.isSaved && now - endTs > RETENTION_MS;
 
+  const hasAction =
+    (effectiveStatus === "upcoming" && inWindow) ||
+    effectiveStatus === "completed" ||
+    (effectiveStatus === "upcoming" && cancellable && onCancel);
+
   return (
     <motion.div
       whileHover={{ y: -2 }}
       transition={{ type: "spring", stiffness: 320, damping: 28 }}
-      className="card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 hover:border-accent/40 transition-colors"
+      className="card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 hover:border-accent/40 transition-colors"
     >
       <div className="space-y-1.5 flex-1 min-w-0">
-        <div className="text-[15px] font-medium tabular-nums">
+        <div className="text-[15px] font-medium tabular-nums leading-snug">
           {formatDate(start)} {formatTimeRange(start, end)}
         </div>
-        <div className="text-caption text-muted">
+        <div className="text-caption text-muted truncate">
           {role === "user" ? "倾听者" : "倾诉者"} · {booking.counterpartyUsername}
         </div>
         <div className="flex flex-wrap gap-2 pt-1">
@@ -92,26 +97,28 @@ export default function BookingCard({
           </div>
         )}
       </div>
-      <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">
-        {effectiveStatus === "upcoming" && inWindow && (
-          <Link href={chatUrl} className="btn-primary">
-            进入聊天室
-          </Link>
-        )}
-        {effectiveStatus === "completed" && (
-          <Link href={chatUrl} className="btn-secondary">
-            查看
-          </Link>
-        )}
-        {effectiveStatus === "upcoming" && cancellable && onCancel && (
-          <button
-            onClick={onCancel}
-            className="text-[13px] text-muted hover:text-danger transition-colors"
-          >
-            取消预约
-          </button>
-        )}
-      </div>
+      {hasAction && (
+        <div className="flex items-center gap-3 shrink-0 -mt-1 sm:mt-0 sm:flex-row sm:items-center">
+          {effectiveStatus === "upcoming" && inWindow && (
+            <Link href={chatUrl} className="btn-primary flex-1 sm:flex-initial">
+              进入聊天室
+            </Link>
+          )}
+          {effectiveStatus === "completed" && (
+            <Link href={chatUrl} className="btn-secondary flex-1 sm:flex-initial">
+              查看
+            </Link>
+          )}
+          {effectiveStatus === "upcoming" && cancellable && onCancel && (
+            <button
+              onClick={onCancel}
+              className="text-[13px] text-muted hover:text-danger transition-colors shrink-0 px-2 py-2 -mr-2"
+            >
+              取消预约
+            </button>
+          )}
+        </div>
+      )}
     </motion.div>
   );
 }

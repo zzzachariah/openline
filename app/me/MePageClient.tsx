@@ -123,14 +123,16 @@ export default function MePageClient({
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16">
-        <div className="max-w-prose mx-auto px-6">
-          <div className="mb-12">
-            <h1 className="text-h2 font-medium tracking-tight mb-2 flex items-center gap-3 flex-wrap">
+      <main className="pt-20 sm:pt-24 pb-16">
+        <div className="max-w-prose mx-auto px-5 sm:px-6">
+          <div className="mb-10 sm:mb-12">
+            <h1 className="text-h2-mobile sm:text-h2 font-medium tracking-tight mb-3">
               你好，{username}
+            </h1>
+            <div className="flex items-center gap-3 flex-wrap">
               <button
                 onClick={copyUsername}
-                className="inline-flex items-center gap-1 text-[13px] text-muted hover:text-accent transition-colors px-2 py-1 rounded-md border border-border"
+                className="inline-flex items-center gap-1 text-[13px] text-muted hover:text-accent transition-colors px-2.5 py-1.5 rounded-md border border-border"
                 aria-label="复制用户名"
               >
                 {copied ? (
@@ -145,13 +147,11 @@ export default function MePageClient({
                   </>
                 )}
               </button>
-            </h1>
-            <p className="text-caption text-muted">
-              记得保存这个用户名——换设备登录时需要它。
-            </p>
+              <p className="text-caption text-muted">换设备登录时需要它</p>
+            </div>
           </div>
 
-          <div className="flex gap-1 mb-6 border-b border-border">
+          <div className="flex gap-1 mb-6 border-b border-border overflow-x-auto -mx-1 px-1">
             {(
               [
                 { key: "upcoming", label: "即将开始" },
@@ -162,7 +162,7 @@ export default function MePageClient({
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
-                className={`px-4 py-2 text-[14px] -mb-px border-b-2 transition-colors ${
+                className={`shrink-0 px-3 sm:px-4 py-2.5 text-[14px] -mb-px border-b-2 transition-colors ${
                   tab === t.key
                     ? "border-accent text-foreground"
                     : "border-transparent text-muted hover:text-foreground"
@@ -360,17 +360,17 @@ function WriteReviewModal({
   const busy = submitting || deleting;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:px-4">
       <div className="absolute inset-0 bg-black/30" onClick={() => !busy && onClose()} />
-      <div className="relative bg-surface border border-border rounded-xl p-7 w-full max-w-[480px]">
+      <div className="relative modal-card w-full max-w-[480px] rounded-b-none sm:rounded-xl pb-safe">
         <button
           onClick={() => !busy && onClose()}
-          className="absolute top-4 right-4 text-muted hover:text-foreground"
+          className="absolute top-3 right-3 sm:top-4 sm:right-4 inline-flex items-center justify-center w-10 h-10 text-muted hover:text-foreground"
           aria-label="关闭"
         >
           <X size={18} />
         </button>
-        <h3 className="text-[18px] font-medium mb-1">{existing ? "编辑评价" : "写评价"}</h3>
+        <h3 className="text-[18px] font-medium mb-1 pr-8">{existing ? "编辑评价" : "写评价"}</h3>
         <p className="text-caption text-muted mb-4">给 {listenerName}</p>
         <textarea
           value={comment}

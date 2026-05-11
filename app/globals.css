@@ -37,6 +37,25 @@ body {
   font-size: 16px;
   line-height: 1.7;
   font-weight: 400;
+  /* Prevent iOS from auto-zooming on form focus and keep tap highlight subtle */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Honor iOS safe areas for fixed bottom UI */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pb-safe {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+}
+
+/* Leave space for the mobile bottom tab bar on regular (non-fullscreen) pages.
+   Applied to body so both <main> content and the <footer> stay above the bar. */
+@media (max-width: 767px) {
+  body.has-mobile-tabbar {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
 }
 
 ::selection {
@@ -131,6 +150,7 @@ body {
   transition: opacity 200ms ease-out, transform 200ms ease-out;
   border: 1px solid var(--accent);
   cursor: pointer;
+  min-height: 44px;
 }
 
 .btn-primary:hover {
@@ -159,6 +179,7 @@ body {
   border: 1px solid var(--border);
   transition: border-color 200ms ease-out, background 200ms ease-out;
   cursor: pointer;
+  min-height: 44px;
 }
 
 .btn-secondary:hover {
@@ -179,6 +200,7 @@ body {
   border: 1px solid transparent;
   transition: background 200ms ease-out;
   cursor: pointer;
+  min-height: 44px;
 }
 
 .btn-ghost:hover {
@@ -327,10 +349,17 @@ body {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--foreground);
-  font-size: 15px;
+  /* 16px on iOS prevents auto-zoom on focus */
+  font-size: 16px;
   line-height: 1.5;
   outline: none;
   transition: border-color 200ms ease-out;
+}
+
+@media (min-width: 640px) {
+  .input {
+    font-size: 15px;
+  }
 }
 
 .input:focus {
@@ -346,7 +375,38 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 32px;
+  padding: 20px;
+}
+
+@media (min-width: 640px) {
+  .card {
+    padding: 32px;
+  }
+}
+
+/* Modal: smaller padding on mobile so 320px-ish screens don't feel cramped */
+.modal-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 22px;
+}
+
+@media (min-width: 640px) {
+  .modal-card {
+    border-radius: 12px;
+    padding: 28px;
+  }
+}
+
+/* Hide manual <br> on mobile so paragraphs reflow naturally */
+.br-md {
+  display: none;
+}
+@media (min-width: 768px) {
+  .br-md {
+    display: inline;
+  }
 }
 
 /* Subtle pulse for live counters */
