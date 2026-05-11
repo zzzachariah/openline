@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import Logo from "./Logo";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
@@ -131,44 +132,57 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
                 className="btn-nav text-[14px] flex items-center gap-1"
               >
                 {user.username}
-                <ChevronDown size={14} />
+                <motion.span
+                  animate={{ rotate: dropdownOpen ? 180 : 0 }}
+                  transition={{ duration: 0.2, ease: [0.215, 0.61, 0.355, 1] }}
+                >
+                  <ChevronDown size={14} />
+                </motion.span>
               </button>
-              {dropdownOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setDropdownOpen(false)}
-                  />
-                  <div className="absolute right-0 top-full mt-1 w-44 bg-surface border border-border rounded-lg py-1 shadow-sm z-20">
-                    <Link
-                      href={
-                        user.is_listener
-                          ? "/listener"
-                          : user.listener_application_at
-                          ? "/listener/pending"
-                          : "/me"
-                      }
+              <AnimatePresence>
+                {dropdownOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
                       onClick={() => setDropdownOpen(false)}
-                      className="block px-3 py-2 text-[14px] hover:bg-accent-soft"
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                      transition={{ duration: 0.16, ease: [0.215, 0.61, 0.355, 1] }}
+                      className="absolute right-0 top-full mt-1 w-44 bg-surface border border-border rounded-lg py-1 shadow-sm z-20 origin-top-right"
                     >
-                      {user.is_listener
-                        ? "倾听者后台"
-                        : user.listener_application_at
-                        ? "申请审核中"
-                        : "我的预约"}
-                    </Link>
-                    <button
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        logout();
-                      }}
-                      className="block w-full text-left px-3 py-2 text-[14px] hover:bg-accent-soft"
-                    >
-                      退出
-                    </button>
-                  </div>
-                </>
-              )}
+                      <Link
+                        href={
+                          user.is_listener
+                            ? "/listener"
+                            : user.listener_application_at
+                            ? "/listener/pending"
+                            : "/me"
+                        }
+                        onClick={() => setDropdownOpen(false)}
+                        className="block px-3 py-2 text-[14px] hover:bg-accent-soft transition-colors"
+                      >
+                        {user.is_listener
+                          ? "倾听者后台"
+                          : user.listener_application_at
+                          ? "申请审核中"
+                          : "我的预约"}
+                      </Link>
+                      <button
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          logout();
+                        }}
+                        className="block w-full text-left px-3 py-2 text-[14px] hover:bg-accent-soft transition-colors"
+                      >
+                        退出
+                      </button>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
             </div>
           )}
         </div>
@@ -182,48 +196,50 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
         </button>
       </div>
 
-      {menuOpen && (
-        <div className="md:hidden border-t border-border bg-background">
-          <div className="px-6 py-4 flex flex-col gap-2">
-            <Link href="/" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">介绍</Link>
-            {!user && (
-              <>
-                <Link href="/book" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">预约</Link>
-                <Link href="/login" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">登录</Link>
-              </>
-            )}
-            {user && !user.is_listener && !user.listener_application_at && (
-              <>
-                <Link href="/book" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">预约</Link>
-                <Link href="/me" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">我的预约</Link>
-              </>
-            )}
-            {user && !user.is_listener && user.listener_application_at && (
-              <Link href="/listener/pending" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">申请审核中</Link>
-            )}
-            {user && user.is_listener && (
-              <Link
-                href="/listener"
-                onClick={() => setMenuOpen(false)}
-                className="py-2 text-[15px] text-accent font-medium"
-              >
-                倾听者后台
-              </Link>
-            )}
-            {user && (
-              <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  logout();
-                }}
-                className="py-2 text-[15px] text-left text-muted"
-              >
-                退出
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {menuOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.22, ease: [0.215, 0.61, 0.355, 1] }}
+            className="md:hidden border-t border-border bg-background overflow-hidden"
+          >
+            <div className="px-6 py-4 flex flex-col gap-2">
+              <Link href="/" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">介绍</Link>
+              {!user && (
+                <>
+                  <Link href="/book" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">预约</Link>
+                  <Link href="/login" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">登录</Link>
+                </>
+              )}
+              {user && !user.is_listener && !user.listener_application_at && (
+                <>
+                  <Link href="/book" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">预约</Link>
+                  <Link href="/me" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">我的预约</Link>
+                </>
+              )}
+              {user && !user.is_listener && user.listener_application_at && (
+                <Link href="/listener/pending" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">申请审核中</Link>
+              )}
+              {user && user.is_listener && (
+                <Link href="/listener" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">倾听者后台</Link>
+              )}
+              {user && (
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    logout();
+                  }}
+                  className="py-2 text-[15px] text-left text-muted"
+                >
+                  退出
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </nav>
   );
 }

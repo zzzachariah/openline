@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Send, Copy, Check, ChevronDown } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { formatTime } from "@/lib/format";
@@ -384,7 +385,12 @@ function MessageBubble({ message, mine }: { message: Message; mine: boolean }) {
       }
     }
     return (
-      <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+      <motion.div
+        initial={{ opacity: 0, y: 6, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.22, ease: [0.215, 0.61, 0.355, 1] }}
+        className={`flex ${mine ? "justify-end" : "justify-start"}`}
+      >
         <div className="max-w-[70%]">
           <div className="text-caption text-muted mb-1 px-1">腾讯会议号</div>
           <div className="rounded-xl border border-accent bg-accent-soft px-4 py-3 flex items-center gap-3">
@@ -405,7 +411,7 @@ function MessageBubble({ message, mine }: { message: Message; mine: boolean }) {
             </button>
           </div>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
@@ -416,7 +422,12 @@ function MessageBubble({ message, mine }: { message: Message; mine: boolean }) {
   }
 
   return (
-    <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+    <motion.div
+      initial={{ opacity: 0, y: 6, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.22, ease: [0.215, 0.61, 0.355, 1] }}
+      className={`flex ${mine ? "justify-end" : "justify-start"}`}
+    >
       <div
         className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap break-words ${
           mine
@@ -426,7 +437,7 @@ function MessageBubble({ message, mine }: { message: Message; mine: boolean }) {
       >
         {message.content}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
