@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Shuffle, Sparkles, X } from "lucide-react";
 import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
+import ListenerReviewsModal from "@/components/ListenerReviewsModal";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { formatDayHeader, formatDayKey, formatTimeRange } from "@/lib/format";
 
@@ -45,6 +45,7 @@ export default function BookPage() {
   const [selected, setSelected] = useState<Slot | null>(null);
   // Multi-listener flow: roulette pick first, then confirm.
   const [rouletteGroup, setRouletteGroup] = useState<TimeGroup | null>(null);
+  const [reviewsFor, setReviewsFor] = useState<{ id: string; username: string } | null>(null);
   const [format, setFormat] = useState<"text" | "voice">("text");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -238,6 +239,7 @@ export default function BookPage() {
                         key={group.key}
                         group={group}
                         onOpen={() => openGroup(group)}
+                        onShowReviews={(l) => setReviewsFor(l)}
                       />
                     ))}
                   </div>
@@ -247,7 +249,6 @@ export default function BookPage() {
           )}
         </div>
       </main>
-      <Footer />
 
       {selected && (
         <ConfirmModal
@@ -258,6 +259,9 @@ export default function BookPage() {
           error={error}
           onClose={closeAll}
           onConfirm={() => confirmBooking(selected)}
+          onShowReviews={() =>
+            setReviewsFor({ id: selected.listener.id, username: selected.listener.username })
+          }
         />
       )}
 
@@ -270,13 +274,30 @@ export default function BookPage() {
           error={error}
           onClose={closeAll}
           onConfirm={(winner) => confirmBooking(winner)}
+          onShowReviews={(l) => setReviewsFor(l)}
+        />
+      )}
+
+      {reviewsFor && (
+        <ListenerReviewsModal
+          listenerId={reviewsFor.id}
+          listenerUsername={reviewsFor.username}
+          onClose={() => setReviewsFor(null)}
         />
       )}
     </>
   );
 }
 
-function TimeGroupCard({ group, onOpen }: { group: TimeGroup; onOpen: () => void }) {
+function TimeGroupCard({
+  group,
+  onOpen,
+  onShowReviews,
+}: {
+  group: TimeGroup;
+  onOpen: () => void;
+  onShowReviews: (l: { id: string; username: string }) => void;
+}) {
   const start = new Date(group.startTime);
   const end = new Date(group.endTime);
   const multi = group.slots.length > 1;
@@ -284,18 +305,39 @@ function TimeGroupCard({ group, onOpen }: { group: TimeGroup; onOpen: () => void
   if (!multi) {
     const slot = group.slots[0];
     return (
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onOpen}
-        className="w-full text-left card hover:border-accent transition-colors"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onOpen();
+          }
+        }}
+        className="w-full text-left card hover:border-accent transition-colors cursor-pointer focus:outline-none focus:border-accent"
       >
         <div className="flex items-center justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <div className="text-[15px] font-medium">{formatTimeRange(start, end)}</div>
-            <div className="text-caption text-muted mt-0.5">{slot.listener.username}</div>
+            <div className="text-caption text-muted mt-0.5 flex items-center gap-2 flex-wrap">
+              <span>{slot.listener.username}</span>
+              <span className="text-border">·</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onShowReviews({ id: slot.listener.id, username: slot.listener.username });
+                }}
+                className="text-accent hover:underline"
+              >
+                查看评价
+              </button>
+            </div>
           </div>
-          <span className="text-caption text-accent">预约 →</span>
+          <span className="text-caption text-accent shrink-0">预约 →</span>
         </div>
-      </button>
+      </div>
     );
   }
 
@@ -339,6 +381,7 @@ function ConfirmModal({
   error,
   onClose,
   onConfirm,
+  onShowReviews,
 }: {
   slot: Slot;
   format: "text" | "voice";
@@ -347,6 +390,7 @@ function ConfirmModal({
   error: string | null;
   onClose: () => void;
   onConfirm: () => void;
+  onShowReviews: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
@@ -361,7 +405,19 @@ function ConfirmModal({
         </button>
         <h3 className="text-[18px] font-medium mb-5">确认预约？</h3>
         <div className="space-y-3 text-[14px] mb-6">
-          <Row label="倾听者" value={slot.listener.username} />
+          <div className="flex items-start justify-between gap-4">
+            <span className="text-muted shrink-0">倾听者</span>
+            <div className="text-right">
+              <div>{slot.listener.username}</div>
+              <button
+                type="button"
+                onClick={onShowReviews}
+                className="text-[12px] text-accent hover:underline mt-0.5"
+              >
+                查看评价
+              </button>
+            </div>
+          </div>
           <Row
             label="时间"
             value={`${formatDayHeader(new Date(slot.start_time))} ${formatTimeRange(
@@ -398,6 +454,7 @@ function RouletteModal({
   error,
   onClose,
   onConfirm,
+  onShowReviews,
 }: {
   group: TimeGroup;
   format: "text" | "voice";
@@ -406,6 +463,7 @@ function RouletteModal({
   error: string | null;
   onClose: () => void;
   onConfirm: (winner: Slot) => void;
+  onShowReviews: (l: { id: string; username: string }) => void;
 }) {
   const [spinKey, setSpinKey] = useState(0);
   const [winner, setWinner] = useState<Slot | null>(null);
@@ -447,9 +505,18 @@ function RouletteModal({
           {winner === null ? (
             <span className="text-caption text-muted">抽取中…</span>
           ) : (
-            <span className="text-[14px] inline-flex items-center gap-1.5">
+            <span className="text-[14px] inline-flex items-center gap-1.5 flex-wrap justify-center">
               <Sparkles size={14} className="text-accent" />
               为你匹配到 <span className="font-medium">{winner.listener.username}</span>
+              <button
+                type="button"
+                onClick={() =>
+                  onShowReviews({ id: winner.listener.id, username: winner.listener.username })
+                }
+                className="text-[12px] text-accent hover:underline ml-1"
+              >
+                查看评价
+              </button>
             </span>
           )}
         </div>

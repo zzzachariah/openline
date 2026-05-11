@@ -10,6 +10,7 @@ export type BookingCardData = {
   format: "text" | "voice";
   status: "upcoming" | "completed" | "cancelled";
   counterpartyUsername: string;
+  counterpartyId?: string;
   startTime: string;
   endTime: string;
   isSaved: boolean;

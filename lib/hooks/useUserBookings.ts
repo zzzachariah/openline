@@ -9,6 +9,7 @@ type RawBooking = {
   format: "text" | "voice";
   status: "upcoming" | "completed" | "cancelled";
   is_saved: boolean | null;
+  listener_id: string;
   listener: { username: string } | { username: string }[];
   slot: { start_time: string; end_time: string } | { start_time: string; end_time: string }[];
 };
@@ -22,7 +23,7 @@ async function fetcher([, , userId]: readonly [string, string, string]): Promise
   const { data } = await supabase
     .from("bookings")
     .select(
-      "id, format, status, is_saved, listener:profiles!bookings_listener_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
+      "id, format, status, is_saved, listener_id, listener:profiles!bookings_listener_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
@@ -35,6 +36,7 @@ async function fetcher([, , userId]: readonly [string, string, string]): Promise
       format: r.format,
       status: r.status,
       counterpartyUsername: listener.username,
+      counterpartyId: r.listener_id,
       startTime: slot.start_time,
       endTime: slot.end_time,
       isSaved: !!r.is_saved,
