@@ -62,32 +62,34 @@ export default function MonthCalendar({
   return (
     <div className="select-none">
       <div className="flex items-center justify-between mb-4">
-        <button
+        <motion.button
+          whileTap={{ scale: 0.92 }}
           onClick={() => shift(-1)}
           aria-label="上个月"
           className="p-1.5 rounded-full text-muted hover:text-foreground hover:bg-accent-soft transition-colors"
         >
           <ChevronLeft size={18} />
-        </button>
+        </motion.button>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={anchor.getFullYear() + "-" + anchor.getMonth()}
             initial={{ opacity: 0, y: direction > 0 ? -6 : 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: direction > 0 ? 6 : -6 }}
-            transition={{ duration: 0.18, ease: [0.215, 0.61, 0.355, 1] }}
+            transition={{ duration: 0.2, ease: [0.215, 0.61, 0.355, 1] }}
             className="text-[15px] font-medium tracking-tight tabular-nums"
           >
             {MONTH_LABEL(anchor)}
           </motion.div>
         </AnimatePresence>
-        <button
+        <motion.button
+          whileTap={{ scale: 0.92 }}
           onClick={() => shift(1)}
           aria-label="下个月"
           className="p-1.5 rounded-full text-muted hover:text-foreground hover:bg-accent-soft transition-colors"
         >
           <ChevronRight size={18} />
-        </button>
+        </motion.button>
       </div>
 
       <div className="grid grid-cols-7 gap-1 mb-1.5 text-caption text-muted text-center">
@@ -104,7 +106,7 @@ export default function MonthCalendar({
           initial={{ opacity: 0, x: direction * 12 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: direction * -12 }}
-          transition={{ duration: 0.22, ease: [0.215, 0.61, 0.355, 1] }}
+          transition={{ duration: 0.24, ease: [0.215, 0.61, 0.355, 1] }}
           className="grid grid-cols-7 gap-1"
         >
           {grid.map((d) => {
@@ -177,30 +179,58 @@ function DayCell({
       onClick={onPick}
       disabled={!selectable && !hoverAddable}
       whileHover={selectable || hoverAddable ? { y: -1 } : undefined}
-      whileTap={selectable || hoverAddable ? { scale: 0.97 } : undefined}
-      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+      whileTap={selectable || hoverAddable ? { scale: 0.96 } : undefined}
+      animate={
+        isSelected
+          ? {
+              boxShadow: [
+                "0 0 0 0 rgba(91,155,142,0)",
+                "0 4px 14px -2px rgba(91,155,142,0.35)",
+              ],
+            }
+          : { boxShadow: "0 0 0 0 rgba(91,155,142,0)" }
+      }
+      transition={{ type: "spring", stiffness: 360, damping: 28 }}
       className={`group relative aspect-square rounded-lg flex flex-col items-center justify-center text-[13px] tabular-nums transition-colors
         ${baseTextColor}
         ${isSelected ? "bg-accent text-white" : has ? "bg-accent-soft" : "hover:bg-accent-soft"}
         ${!selectable && !hoverAddable ? "cursor-default" : "cursor-pointer"}
       `}
     >
-      <span
+      <motion.span
         className={`leading-none ${
           isToday && !isSelected ? "font-semibold text-accent" : ""
         }`}
+        animate={
+          isToday && !isSelected
+            ? { opacity: [1, 0.65, 1] }
+            : { opacity: 1 }
+        }
+        transition={
+          isToday && !isSelected
+            ? { duration: 2.6, repeat: Infinity, ease: "easeInOut" }
+            : undefined
+        }
       >
         {date.getDate()}
-      </span>
+      </motion.span>
 
       {has && (
         <span className="mt-1 flex items-center gap-0.5">
           {[...Array(Math.min(meta!.count, 3))].map((_, i) => (
-            <span
+            <motion.span
               key={i}
+              initial={{ scale: 0.4, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{
+                type: "spring",
+                stiffness: 420,
+                damping: 22,
+                delay: 0.04 * i,
+              }}
               className={`w-1 h-1 rounded-full ${
                 isSelected
-                  ? "bg-white/70"
+                  ? "bg-white/80"
                   : allBooked
                   ? "bg-muted/60"
                   : "bg-accent"
