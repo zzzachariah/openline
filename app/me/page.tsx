@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import { Copy, Check } from "lucide-react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
@@ -40,21 +41,30 @@ export default function MePage() {
     async function load() {
       const supabase = createBrowserClient();
       const { data: auth } = await supabase.auth.getUser();
+      if (cancelled) return;
       if (!auth.user) {
-        router.push("/login?redirect=/me");
+        router.replace("/login?redirect=/me");
         return;
       }
       const { data: profile } = await supabase
         .from("profiles")
-        .select("username, is_listener")
+        .select("username, is_listener, listener_application_at")
         .eq("id", auth.user.id)
-        .single();
-      if (!profile) return;
-      if (profile.is_listener) {
-        router.push("/listener");
+        .maybeSingle();
+      if (cancelled) return;
+      if (!profile) {
+        // Profile missing — can't continue here. Send back to login.
+        router.replace("/login?redirect=/me");
         return;
       }
-      if (cancelled) return;
+      if (profile.is_listener) {
+        router.replace("/listener");
+        return;
+      }
+      if (profile.listener_application_at) {
+        router.replace("/listener/pending");
+        return;
+      }
       setUsername(profile.username);
 
       const { data: rows } = await supabase
@@ -65,7 +75,8 @@ export default function MePage() {
         .eq("user_id", auth.user.id)
         .order("created_at", { ascending: false });
 
-      if (!cancelled && rows) {
+      if (cancelled) return;
+      if (rows) {
         const mapped: BookingCardData[] = (rows as RawBooking[]).map((r) => {
           const listener = Array.isArray(r.listener) ? r.listener[0] : r.listener;
           const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
@@ -103,8 +114,7 @@ export default function MePage() {
   async function logout() {
     const supabase = createBrowserClient();
     await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+    window.location.assign("/");
   }
 
   async function cancelBooking(id: string) {
@@ -158,7 +168,12 @@ export default function MePage() {
             <div className="text-muted text-center py-12">载入中...</div>
           ) : (
             <>
-              <div className="mb-12">
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: [0.215, 0.61, 0.355, 1] }}
+                className="mb-12"
+              >
                 <h1 className="text-h2 font-medium tracking-tight mb-2 flex items-center gap-3 flex-wrap">
                   你好，{username}
                   <button
@@ -166,23 +181,34 @@ export default function MePage() {
                     className="inline-flex items-center gap-1 text-[13px] text-muted hover:text-accent transition-colors px-2 py-1 rounded-md border border-border"
                     aria-label="复制用户名"
                   >
-                    {copied ? (
-                      <>
-                        <Check size={12} />
-                        已复制
-                      </>
-                    ) : (
-                      <>
-                        <Copy size={12} />
-                        复制用户名
-                      </>
-                    )}
+                    <AnimatePresence mode="wait" initial={false}>
+                      <motion.span
+                        key={copied ? "copied" : "copy"}
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 4 }}
+                        transition={{ duration: 0.15 }}
+                        className="inline-flex items-center gap-1"
+                      >
+                        {copied ? (
+                          <>
+                            <Check size={12} />
+                            已复制
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={12} />
+                            复制用户名
+                          </>
+                        )}
+                      </motion.span>
+                    </AnimatePresence>
                   </button>
                 </h1>
                 <p className="text-caption text-muted">
                   记得保存这个用户名——换设备登录时需要它。
                 </p>
-              </div>
+              </motion.div>
 
               <div className="flex gap-1 mb-6 border-b border-border">
                 {(
@@ -195,24 +221,71 @@ export default function MePage() {
                   <button
                     key={t.key}
                     onClick={() => setTab(t.key)}
-                    className={`px-4 py-2 text-[14px] -mb-px border-b-2 transition-colors ${
+                    className={`relative px-4 py-2 text-[14px] -mb-px transition-colors ${
                       tab === t.key
-                        ? "border-accent text-foreground"
-                        : "border-transparent text-muted hover:text-foreground"
+                        ? "text-foreground"
+                        : "text-muted hover:text-foreground"
                     }`}
                   >
                     {t.label}
+                    {tab === t.key && (
+                      <motion.span
+                        layoutId="me-tab-underline"
+                        className="absolute left-0 right-0 -bottom-px h-0.5 bg-accent"
+                        transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                      />
+                    )}
                   </button>
                 ))}
               </div>
 
-              {filtered.length === 0 ? (
-                <div className="card text-center text-muted">
-                  <p className="mb-4">还没有预约。</p>
-                  {tab === "upcoming" && (
-                    <Link href="/book" className="btn-primary">
-                      预约一次倾诉
-                    </Link>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={tab}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.22, ease: [0.215, 0.61, 0.355, 1] }}
+                >
+                  {filtered.length === 0 ? (
+                    <div className="card text-center text-muted">
+                      <p className="mb-4">还没有预约。</p>
+                      {tab === "upcoming" && (
+                        <Link href="/book" className="btn-primary">
+                          预约一次倾诉
+                        </Link>
+                      )}
+                    </div>
+                  ) : (
+                    <motion.div
+                      className="space-y-3"
+                      initial="hidden"
+                      animate="show"
+                      variants={{
+                        show: { transition: { staggerChildren: 0.05 } },
+                      }}
+                    >
+                      {filtered.map((b) => (
+                        <motion.div
+                          key={b.id}
+                          variants={{
+                            hidden: { opacity: 0, y: 8 },
+                            show: { opacity: 1, y: 0 },
+                          }}
+                          transition={{
+                            duration: 0.3,
+                            ease: [0.215, 0.61, 0.355, 1],
+                          }}
+                        >
+                          <BookingCard
+                            booking={b}
+                            now={now}
+                            role="user"
+                            onCancel={() => cancelBooking(b.id)}
+                          />
+                        </motion.div>
+                      ))}
+                    </motion.div>
                   )}
                 </div>
               ) : (

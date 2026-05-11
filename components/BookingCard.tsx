@@ -47,9 +47,13 @@ export default function BookingCard({
     booking.status === "completed" && !booking.isSaved && now - endTs > RETENTION_MS;
 
   return (
-    <div className="card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <motion.div
+      whileHover={{ y: -2 }}
+      transition={{ type: "spring", stiffness: 320, damping: 28 }}
+      className="card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 hover:border-accent/40 transition-colors"
+    >
       <div className="space-y-1.5 flex-1 min-w-0">
-        <div className="text-[15px] font-medium">
+        <div className="text-[15px] font-medium tabular-nums">
           {formatDate(start)} {formatTimeRange(start, end)}
         </div>
         <div className="text-caption text-muted">
@@ -79,7 +83,9 @@ export default function BookingCard({
           )}
         </div>
         {booking.status === "upcoming" && !inWindow && (
-          <div className="text-caption text-muted pt-1">{formatCountdown(startTs - now)}</div>
+          <div className="text-caption text-muted pt-1 tabular-nums">
+            {formatCountdown(startTs - now)}
+          </div>
         )}
       </div>
       <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">
@@ -126,6 +132,6 @@ export default function BookingCard({
           </button>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }

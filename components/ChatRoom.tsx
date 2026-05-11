@@ -119,11 +119,10 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
         .eq("id", bookingId)
         .single();
 
+      if (cancelled) return;
       if (!b) {
-        if (!cancelled) {
-          setForbidden(true);
-          setLoading(false);
-        }
+        setForbidden(true);
+        setLoading(false);
         return;
       }
 
@@ -528,7 +527,12 @@ function MessageBubble({ message, mine }: { message: Message; mine: boolean }) {
       }
     }
     return (
-      <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+      <motion.div
+        initial={{ opacity: 0, y: 6, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.22, ease: [0.215, 0.61, 0.355, 1] }}
+        className={`flex ${mine ? "justify-end" : "justify-start"}`}
+      >
         <div className="max-w-[70%]">
           <div className="text-caption text-muted mb-1 px-1">腾讯会议号</div>
           <div className="rounded-xl border border-accent bg-accent-soft px-4 py-3 flex items-center gap-3">
@@ -551,7 +555,7 @@ function MessageBubble({ message, mine }: { message: Message; mine: boolean }) {
             </button>
           </div>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
@@ -585,7 +589,7 @@ function MessageBubble({ message, mine }: { message: Message; mine: boolean }) {
           </span>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
