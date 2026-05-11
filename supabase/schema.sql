@@ -249,6 +249,42 @@ create index if not exists profiles_pending_listener_idx
   on public.profiles(listener_application_at)
   where listener_application_at is not null and is_listener = false;
 
+-- Backfill bookings.listener_id for projects whose bookings table predates this column.
+-- Safe to run repeatedly: it only acts when the column is missing or rows are unbackfilled.
+-- The UPDATE and SET NOT NULL are wrapped in DO + EXECUTE so the SQL referencing
+-- the new column is parsed at runtime (after the ADD COLUMN has executed), which is
+-- required for tools like Supabase SQL Editor that prepare a whole script at once.
+alter table public.bookings
+  add column if not exists listener_id uuid
+  references public.profiles(id) on delete cascade;
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'time_slots'
+      and column_name = 'listener_id'
+  ) then
+    execute $sql$
+      update public.bookings b
+         set listener_id = ts.listener_id
+        from public.time_slots ts
+       where b.slot_id = ts.id
+         and b.listener_id is null
+    $sql$;
+  end if;
+end $$;
+
+do $$
+begin
+  execute 'alter table public.bookings alter column listener_id set not null';
+exception when others then
+  raise notice 'bookings.listener_id still has NULL rows; skipping SET NOT NULL';
+end $$;
+
+create index if not exists bookings_listener_idx on public.bookings(listener_id);
+
 -- =====================================================================
 -- Optional: 7-day message auto-deletion (requires pg_cron extension)
 -- =====================================================================
