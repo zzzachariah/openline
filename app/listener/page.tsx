@@ -20,6 +20,7 @@ type RawBooking = {
   id: string;
   format: "text" | "voice";
   status: "upcoming" | "completed" | "cancelled";
+  is_saved: boolean | null;
   user: { username: string } | { username: string }[];
   slot: { start_time: string; end_time: string } | { start_time: string; end_time: string }[];
 };
@@ -75,7 +76,7 @@ export default function ListenerPage() {
     const { data: bookingRows } = await supabase
       .from("bookings")
       .select(
-        "id, format, status, user:profiles!bookings_user_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
+        "id, format, status, is_saved, user:profiles!bookings_user_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
       )
       .eq("listener_id", auth.user.id)
       .order("created_at", { ascending: false });
@@ -90,6 +91,7 @@ export default function ListenerPage() {
           counterpartyUsername: user.username,
           startTime: slot.start_time,
           endTime: slot.end_time,
+          isSaved: !!r.is_saved,
         };
       });
       setBookings(mapped);

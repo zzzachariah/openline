@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Bookmark, BookmarkCheck } from "lucide-react";
 import { formatDate, formatTimeRange, formatCountdown } from "@/lib/format";
 
 export type BookingCardData = {
@@ -10,6 +11,7 @@ export type BookingCardData = {
   counterpartyUsername: string;
   startTime: string;
   endTime: string;
+  isSaved: boolean;
 };
 
 type Props = {
@@ -17,9 +19,20 @@ type Props = {
   now: number;
   role: "user" | "listener";
   onCancel?: () => void;
+  onToggleSaved?: () => void;
+  saveBusy?: boolean;
 };
 
-export default function BookingCard({ booking, now, role, onCancel }: Props) {
+const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+export default function BookingCard({
+  booking,
+  now,
+  role,
+  onCancel,
+  onToggleSaved,
+  saveBusy,
+}: Props) {
   const start = new Date(booking.startTime);
   const end = new Date(booking.endTime);
   const startTs = start.getTime();
@@ -30,6 +43,8 @@ export default function BookingCard({ booking, now, role, onCancel }: Props) {
   const inWindow = now >= fiveMinBeforeStart && now <= endTs;
   const cancellable = booking.status === "upcoming" && now < oneHourBeforeStart;
   const chatUrl = role === "user" ? `/chat/${booking.id}` : `/listener/chat/${booking.id}`;
+  const pastRetention =
+    booking.status === "completed" && !booking.isSaved && now - endTs > RETENTION_MS;
 
   return (
     <div className="card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -51,6 +66,17 @@ export default function BookingCard({ booking, now, role, onCancel }: Props) {
               ? "已完成"
               : "已取消"}
           </span>
+          {booking.status === "completed" && booking.isSaved && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[12px] border border-accent text-accent">
+              <BookmarkCheck size={11} />
+              已保存
+            </span>
+          )}
+          {pastRetention && (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] border border-border text-muted">
+              聊天记录已删除
+            </span>
+          )}
         </div>
         {booking.status === "upcoming" && !inWindow && (
           <div className="text-caption text-muted pt-1">{formatCountdown(startTs - now)}</div>
@@ -66,6 +92,30 @@ export default function BookingCard({ booking, now, role, onCancel }: Props) {
           <Link href={chatUrl} className="btn-secondary">
             查看
           </Link>
+        )}
+        {booking.status === "completed" && role === "user" && onToggleSaved && !pastRetention && (
+          <button
+            onClick={onToggleSaved}
+            disabled={saveBusy}
+            className={`inline-flex items-center gap-1 text-[13px] px-2.5 py-1 rounded-md border transition-colors ${
+              booking.isSaved
+                ? "border-accent text-accent bg-accent-soft"
+                : "border-border text-muted hover:text-foreground"
+            } ${saveBusy ? "opacity-60" : ""}`}
+            aria-label={booking.isSaved ? "取消保存" : "保存聊天记录"}
+          >
+            {booking.isSaved ? (
+              <>
+                <BookmarkCheck size={13} />
+                已保存
+              </>
+            ) : (
+              <>
+                <Bookmark size={13} />
+                保存
+              </>
+            )}
+          </button>
         )}
         {booking.status === "upcoming" && cancellable && onCancel && (
           <button
