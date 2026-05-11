@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import Logo from "./Logo";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 
 type NavUser = {
   username: string;
@@ -23,7 +22,6 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
   const [user, setUser] = useState<NavUser>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const router = useRouter();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 80);
@@ -61,7 +59,19 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
     }
 
     loadUser();
-    const { data: sub } = supabase.auth.onAuthStateChange(() => loadUser());
+    // The callback fires while GoTrueClient still holds its internal lock
+    // (e.g. during signInWithPassword / signOut). Calling loadUser() — which
+    // awaits supabase.auth.getUser() — directly would try to re-acquire the
+    // same non-reentrant lock and deadlock the sign-in, leaving the login
+    // button stuck on "登录中..." (and signup's 15s wrapper firing
+    // "注册完成但登录超时"). Defer to the next microtask so the lock has been
+    // released before we re-enter the auth client.
+    // https://supabase.com/docs/reference/javascript/auth-onauthstatechange
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      setTimeout(() => {
+        if (active) loadUser();
+      }, 0);
+    });
     return () => {
       active = false;
       sub.subscription.unsubscribe();
@@ -73,14 +83,15 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
   async function logout() {
     const supabase = createBrowserClient();
     await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+    // Hard navigation forces a fresh server render so every layout drops the
+    // stale authenticated state and any in-flight RSC requests are cancelled.
+    window.location.assign("/");
   }
 
   return (
     <nav
-      className={`fixed top-0 left-0 right-0 z-40 transition-colors duration-300 ${
-        showSolid ? "bg-background border-b border-border" : "bg-transparent"
+      className={`fixed top-0 left-0 right-0 z-40 transition-colors duration-300 border-b border-border ${
+        showSolid ? "bg-background" : "bg-transparent"
       }`}
     >
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
@@ -89,31 +100,36 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
           <span className="text-[15px] font-medium tracking-tight">openline</span>
         </Link>
 
-        <div className="hidden md:flex items-center gap-1">
-          <Link href="/" className="btn-ghost text-[14px]">介绍</Link>
+        <div className="hidden md:flex items-center gap-2">
+          <Link href="/" className="btn-nav text-[14px]">介绍</Link>
           {!user && (
             <>
-              <Link href="/book" className="btn-ghost text-[14px]">预约</Link>
-              <Link href="/login" className="btn-ghost text-[14px]">登录</Link>
+              <Link href="/book" className="btn-nav text-[14px]">预约</Link>
+              <Link href="/login" className="btn-nav text-[14px]">登录</Link>
             </>
           )}
           {user && !user.is_listener && !user.listener_application_at && (
             <>
-              <Link href="/book" className="btn-ghost text-[14px]">预约</Link>
-              <Link href="/me" className="btn-ghost text-[14px]">我的</Link>
+              <Link href="/book" className="btn-nav text-[14px]">预约</Link>
+              <Link href="/me" className="btn-nav text-[14px]">我的</Link>
             </>
           )}
           {user && !user.is_listener && user.listener_application_at && (
-            <Link href="/listener/pending" className="btn-ghost text-[14px]">审核中</Link>
+            <Link href="/listener/pending" className="btn-nav text-[14px]">审核中</Link>
           )}
           {user && user.is_listener && (
-            <Link href="/listener" className="btn-ghost text-[14px]">后台</Link>
+            <Link
+              href="/listener"
+              className="btn-primary text-[14px] py-1.5 px-3"
+            >
+              倾听者后台
+            </Link>
           )}
           {user && (
             <div className="relative">
               <button
                 onClick={() => setDropdownOpen((v) => !v)}
-                className="btn-ghost text-[14px] flex items-center gap-1"
+                className="btn-nav text-[14px] flex items-center gap-1"
               >
                 {user.username}
                 <motion.span
