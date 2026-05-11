@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Check, Copy } from "lucide-react";
 import Logo from "@/components/Logo";
 import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { usernameToEmail } from "@/lib/username";
 
@@ -84,7 +83,7 @@ function ListenerSignupContent() {
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
+      <main className="pt-24 pb-16">
         <div className="max-w-[400px] mx-auto px-6">
           <div className="flex justify-center mb-8">
             <Logo size={40} className="text-accent" />
@@ -187,7 +186,6 @@ function ListenerSignupContent() {
           )}
         </div>
       </main>
-      <Footer />
     </>
   );
 }

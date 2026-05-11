@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X } from "lucide-react";
 import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
 import BookingCard, { BookingCardData } from "@/components/BookingCard";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { formatDayHeader, formatDayKey, formatTime, formatTimeRange } from "@/lib/format";
@@ -112,11 +111,13 @@ export default function ListenerPage() {
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
+      <main className="pt-24 pb-16">
         <div className="max-w-prose mx-auto px-6">
-          <div className="mb-10">
-            <h1 className="text-h2 font-medium tracking-tight">倾听者后台</h1>
-            <p className="text-caption text-muted mt-1">{username}</p>
+          <div className="mb-12">
+            <h1 className="text-h2 font-medium tracking-tight mb-2">
+              你好，{username}
+            </h1>
+            <p className="text-caption text-muted">倾听者后台</p>
           </div>
 
           <div className="flex gap-1 mb-6 border-b border-border">
@@ -137,7 +138,6 @@ export default function ListenerPage() {
           )}
         </div>
       </main>
-      <Footer />
 
       {showAdd && (
         <AddSlotModal
