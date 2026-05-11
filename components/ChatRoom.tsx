@@ -176,10 +176,13 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
             setMessages((prev) => {
               if (prev.some((x) => x.id === m.id)) return prev;
               // If this insert is an echo of an optimistic placeholder we
-              // already added locally, replace the placeholder in place.
+              // added locally, replace it in place. Match by temp-* id +
+              // sender + content so the swap works regardless of whether
+              // the local row is still pending or has been cleared by
+              // the insert response.
               const idx = prev.findIndex(
                 (x) =>
-                  x.pending &&
+                  x.id.startsWith("temp-") &&
                   x.sender_id === m.sender_id &&
                   x.content === m.content
               );
@@ -255,35 +258,37 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
     };
     setMessages((prev) => [...prev, optimistic]);
 
-    const { data, error } = await supabase
-      .from("messages")
-      .insert({
-        booking_id: booking.id,
-        sender_id: me,
-        content: trimmed,
-        message_type: type,
-      })
-      .select("id, booking_id, sender_id, content, message_type, created_at")
-      .single();
+    // Plain insert — no .select().single(). The post-insert SELECT
+    // can return zero rows through RLS (PGRST116 "Cannot coerce the
+    // result to a single JSON object") even when the row landed
+    // successfully, which used to mis-flag every send as 失败. We let
+    // the realtime channel deliver the real row instead.
+    const { error } = await supabase.from("messages").insert({
+      booking_id: booking.id,
+      sender_id: me,
+      content: trimmed,
+      message_type: type,
+    });
 
-    if (error || !data) {
+    if (error) {
+      console.error("send message failed", error);
       setMessages((prev) =>
         prev.map((m) =>
           m.id === tempId ? { ...m, pending: false, failed: true } : m
         )
       );
-      setSendError("发送失败，请重试");
+      const detail = [error.message, error.code, error.details, error.hint]
+        .filter(Boolean)
+        .join(" · ");
+      setSendError(`发送失败：${detail || "请重试"}`);
       return;
     }
 
-    const real = data as Message;
-    setMessages((prev) => {
-      // Realtime may have already inserted the real row.
-      if (prev.some((m) => m.id === real.id)) {
-        return prev.filter((m) => m.id !== tempId);
-      }
-      return prev.map((m) => (m.id === tempId ? real : m));
-    });
+    // Clear the pending flag so the bubble drops the "发送中…" caption.
+    // The realtime echo will swap the temp-* row for the real one.
+    setMessages((prev) =>
+      prev.map((m) => (m.id === tempId ? { ...m, pending: false } : m))
+    );
   }
 
   async function handleSend() {
