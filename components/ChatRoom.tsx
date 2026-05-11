@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Send, Copy, Check, ChevronDown } from "lucide-react";
+import { ArrowLeft, Send, Copy, Check, ChevronDown, Plus, X } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { formatTime } from "@/lib/format";
 
@@ -239,21 +239,31 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
     <div className="flex flex-col h-screen">
       {/* Header */}
       <header className="sticky top-0 z-20 bg-background border-b border-border">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+        <div className="max-w-3xl mx-auto px-3 sm:px-6 h-14 flex items-center gap-2 sm:gap-4">
           <Link
             href={role === "listener" ? "/listener" : "/me"}
-            className="flex items-center gap-1.5 text-[14px] text-muted hover:text-foreground transition-colors"
+            aria-label="返回"
+            className="inline-flex items-center gap-1.5 text-[14px] text-muted hover:text-foreground transition-colors shrink-0 py-2 -ml-1 pr-2"
           >
-            <ArrowLeft size={16} />
-            返回
+            <ArrowLeft size={18} />
+            <span className="hidden sm:inline">返回</span>
           </Link>
-          <div className="text-[14px] text-muted">
-            {sessionEnded ? "已结束" : sessionStarted ? `倾诉中 · 还剩 ${timeStr}` : "等待开始"}
+          <div className="flex-1 min-w-0 text-center">
+            <div className="text-[14px] text-foreground truncate">
+              {sessionEnded ? "已结束" : sessionStarted ? `倾诉中 · 还剩 ${timeStr}` : "等待开始"}
+            </div>
+            {sessionStarted && !sessionEnded && (
+              <div className="text-[12px] text-muted truncate sm:hidden">
+                {booking.counterparty_username}
+              </div>
+            )}
           </div>
           {sessionStarted && !sessionEnded ? (
-            <span className="text-[13px] text-muted">{booking.counterparty_username}</span>
+            <span className="text-[13px] text-muted shrink-0 hidden sm:inline">
+              {booking.counterparty_username}
+            </span>
           ) : (
-            <span className="w-10" />
+            <span className="w-10 shrink-0" aria-hidden="true" />
           )}
         </div>
         {showFiveMinBanner && (
@@ -300,8 +310,8 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
           </div>
 
           {/* Input */}
-          <div className="border-t border-border bg-background">
-            <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3">
+          <div className="border-t border-border bg-background safe-bottom">
+            <div className="max-w-3xl mx-auto px-3 sm:px-6 py-3">
               {role === "listener" && meetingPanelOpen && (
                 <div className="mb-3 flex items-center gap-2">
                   <input
@@ -310,31 +320,52 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
                     onChange={(e) => setMeetingCode(e.target.value)}
                     placeholder="粘贴腾讯会议号"
                     className="input flex-1"
+                    autoFocus
                   />
                   <button
                     onClick={handleSendMeetingCode}
                     disabled={!meetingCode.trim()}
-                    className="btn-primary"
+                    className="btn-primary px-4"
                   >
                     发送
                   </button>
                   <button
                     onClick={() => setMeetingPanelOpen(false)}
-                    className="btn-ghost"
+                    aria-label="取消"
+                    className="inline-flex items-center justify-center w-10 h-10 text-muted hover:text-foreground transition-colors"
                   >
-                    取消
+                    <X size={18} />
                   </button>
                 </div>
               )}
               <div className="flex items-end gap-2">
-                <div className="flex-1 relative">
+                {role === "listener" && (
+                  <button
+                    type="button"
+                    onClick={() => setMeetingPanelOpen((v) => !v)}
+                    aria-label={meetingPanelOpen ? "关闭会议号输入" : "发送腾讯会议号"}
+                    aria-pressed={meetingPanelOpen}
+                    className={`shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-full border transition-colors ${
+                      meetingPanelOpen
+                        ? "border-accent bg-accent-soft text-accent"
+                        : "border-border text-muted hover:border-accent hover:text-accent"
+                    }`}
+                    title="发送腾讯会议号"
+                  >
+                    <Plus
+                      size={18}
+                      className={`transition-transform ${meetingPanelOpen ? "rotate-45" : ""}`}
+                    />
+                  </button>
+                )}
+                <div className="flex-1 relative min-w-0">
                   <textarea
                     value={draft}
                     onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
                     onKeyDown={onKeyDown}
                     placeholder="说点什么..."
                     rows={1}
-                    className="input resize-none min-h-[44px] max-h-32 py-2.5"
+                    className="input resize-none min-h-[40px] max-h-32 py-2"
                     style={{ paddingRight: draft.length > 800 ? 60 : undefined }}
                   />
                   {draft.length > 800 && (
@@ -343,21 +374,11 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
                     </span>
                   )}
                 </div>
-                {role === "listener" && (
-                  <button
-                    type="button"
-                    onClick={() => setMeetingPanelOpen((v) => !v)}
-                    className="btn-secondary py-2.5 px-3 text-[13px]"
-                    title="发送腾讯会议号"
-                  >
-                    发送会议号
-                  </button>
-                )}
                 <button
                   onClick={handleSend}
                   disabled={!draft.trim() || sessionEnded}
-                  className="btn-primary py-2.5 px-4"
                   aria-label="发送"
+                  className="shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-full bg-accent text-white border border-accent transition-opacity disabled:opacity-50 active:scale-95"
                 >
                   <Send size={16} />
                 </button>

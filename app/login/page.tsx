@@ -68,9 +68,9 @@ function LoginContent() {
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
-        <div className="max-w-[400px] mx-auto px-6">
-          <div className="flex justify-center mb-8">
+      <main className="pt-20 sm:pt-24 pb-16 min-h-screen">
+        <div className="max-w-[400px] mx-auto px-5 sm:px-6">
+          <div className="flex justify-center mb-6 sm:mb-8">
             <Logo size={40} className="text-accent" />
           </div>
           <div className="card">

@@ -128,18 +128,20 @@ export default function MePage() {
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
-        <div className="max-w-prose mx-auto px-6">
+      <main className="pt-20 sm:pt-24 pb-16 min-h-screen">
+        <div className="max-w-prose mx-auto px-5 sm:px-6">
           {loading ? (
             <div className="text-muted text-center py-12">载入中...</div>
           ) : (
             <>
-              <div className="mb-12">
-                <h1 className="text-h2 font-medium tracking-tight mb-2 flex items-center gap-3 flex-wrap">
+              <div className="mb-10 sm:mb-12">
+                <h1 className="text-h2-mobile sm:text-h2 font-medium tracking-tight mb-3">
                   你好，{username}
+                </h1>
+                <div className="flex items-center gap-3 flex-wrap">
                   <button
                     onClick={copyUsername}
-                    className="inline-flex items-center gap-1 text-[13px] text-muted hover:text-accent transition-colors px-2 py-1 rounded-md border border-border"
+                    className="inline-flex items-center gap-1 text-[13px] text-muted hover:text-accent transition-colors px-2.5 py-1.5 rounded-md border border-border"
                     aria-label="复制用户名"
                   >
                     {copied ? (
@@ -154,13 +156,13 @@ export default function MePage() {
                       </>
                     )}
                   </button>
-                </h1>
-                <p className="text-caption text-muted">
-                  记得保存这个用户名——换设备登录时需要它。
-                </p>
+                  <p className="text-caption text-muted">
+                    换设备登录时需要它
+                  </p>
+                </div>
               </div>
 
-              <div className="flex gap-1 mb-6 border-b border-border">
+              <div className="flex gap-1 mb-6 border-b border-border overflow-x-auto -mx-1 px-1">
                 {(
                   [
                     { key: "upcoming", label: "即将开始" },
@@ -171,7 +173,7 @@ export default function MePage() {
                   <button
                     key={t.key}
                     onClick={() => setTab(t.key)}
-                    className={`px-4 py-2 text-[14px] -mb-px border-b-2 transition-colors ${
+                    className={`shrink-0 px-3 sm:px-4 py-2.5 text-[14px] -mb-px border-b-2 transition-colors ${
                       tab === t.key
                         ? "border-accent text-foreground"
                         : "border-transparent text-muted hover:text-foreground"

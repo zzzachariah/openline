@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Noto_Sans_SC } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import MobileTabBar from "@/components/MobileTabBar";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -21,6 +22,17 @@ export const metadata: Metadata = {
   description: "免费、匿名的倾诉平台。我们不是医生，但我们愿意认真听你说话。",
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F7F3EC" },
+    { media: "(prefers-color-scheme: dark)", color: "#1A1F1D" },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -29,7 +41,10 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" className={`${inter.variable} ${notoSC.variable}`}>
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {children}
+          <MobileTabBar />
+        </ThemeProvider>
       </body>
     </html>
   );

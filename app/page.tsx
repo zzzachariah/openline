@@ -70,14 +70,14 @@ export default function HomePage() {
               <p className="fade-up fade-up-delay-2">也许只是憋了太久，没人可以讲。</p>
               <p className="fade-up fade-up-delay-3">
                 你可能想过&ldquo;是不是该去看看了&rdquo;，
-                <br />
+                <br className="br-md" />
                 但又不确定自己是不是有问题，
-                <br />
+                <br className="br-md" />
                 或者哪里出了问题。
               </p>
               <p className="fade-up fade-up-delay-4">
                 你也可能担心，如果告诉家长或者老师，
-                <br />
+                <br className="br-md" />
                 会不会对你的学习、生活带来更多影响。
               </p>
             </div>
@@ -109,22 +109,22 @@ export default function HomePage() {
           <div className="space-y-7 text-body-lg">
             <p className="fade-up">
               我们不是医生，也不是专业的心理咨询师。
-              <br />
+              <br className="br-md" />
               我们不会假装是。
             </p>
             <p className="fade-up fade-up-delay-1">
               甚至可以说，
-              <br />
+              <br className="br-md" />
               我们可能也面临过，
-              <br />
+              <br className="br-md" />
               或者正在面临和你类似的问题。
             </p>
             <p className="fade-up fade-up-delay-2">不过，我们是一群愿意认真听你说话的人。</p>
             <p className="fade-up fade-up-delay-3">
               聊一聊，让我们一起看看
-              <br />
+              <br className="br-md" />
               你的疲惫和不安是不是只是需要一个可以说出来的地方；
-              <br />
+              <br className="br-md" />
               还是一个需要被认真对待的信号——
             </p>
             <p className="fade-up fade-up-delay-4">不管是哪种，你都不用一个人扛着。</p>
@@ -142,9 +142,9 @@ export default function HomePage() {
             <p className="fade-up">我们会保护你的隐私。</p>
             <p className="fade-up fade-up-delay-2 text-foreground/90">
               我们不认识你，
-              <br />
+              <br className="br-md" />
               也不需要你提供任何关于真实姓名、地区、
-              <br />
+              <br className="br-md" />
               学校甚至性别的信息。
             </p>
             <p className="fade-up fade-up-delay-4">你可以只做你自己。</p>
@@ -161,14 +161,14 @@ export default function HomePage() {
           <div className="space-y-7 text-body-lg">
             <p className="fade-up">
               跟一个陌生人说出来，
-              <br />
+              <br className="br-md" />
               哪怕对方无法替你解决问题，
-              <br />
+              <br className="br-md" />
               也常常会让事情变得没那么重。
             </p>
             <p className="fade-up fade-up-delay-1">
               心理学中的&ldquo;命名情绪&rdquo;定理就能很好地诠释我们的目的——
-              <br />
+              <br className="br-md" />
               把感受讲出来，本就能让大脑里负责焦虑的部分安静下来。
             </p>
             <div className="flex justify-center fade-up fade-up-delay-2">
@@ -177,24 +177,24 @@ export default function HomePage() {
             <p className="fade-up fade-up-delay-3">但我们也想坦白：</p>
             <p className="fade-up fade-up-delay-4">
               聊天可以帮你缓一口气，帮你理清一点点，
-              <br />
+              <br className="br-md" />
               也能让你没那么孤单。
             </p>
             <p className="fade-up fade-up-delay-5">
               但聊天 <span className="text-accent">不能</span> 代替专业帮助，
-              <br />
+              <br className="br-md" />
               也 <span className="text-accent">不能</span> 处理危险情况。
             </p>
             <p className="fade-up fade-up-delay-6">
               如果你的情况需要更专业的支持，
-              <br />
+              <br className="br-md" />
               我们会直接告诉你，
-              <br />
+              <br className="br-md" />
               并尽力帮你看清下一步可以怎么走。
             </p>
             <p className="fade-up fade-up-delay-6 text-muted">
               我们不隶属于任何机构，
-              <br />
+              <br className="br-md" />
               也不会把你引导到特定的咨询渠道。
             </p>
           </div>
@@ -225,9 +225,9 @@ export default function HomePage() {
             </div>
             <p className="mt-10 text-[15px] text-muted leading-relaxed fade-up fade-up-delay-2">
               如果结束后你感觉并不&ldquo;尽兴&rdquo;，
-              <br />
+              <br className="br-md" />
               再等到我们的初步建议后，
-              <br />
+              <br className="br-md" />
               你大可以选择再约。
             </p>
           </div>
@@ -247,19 +247,19 @@ export default function HomePage() {
             <div className="space-y-7 text-body-lg max-w-md mx-auto">
               <p className="fade-up fade-up-delay-1">
                 我们不收费，
-                <br />
+                <br className="br-md" />
                 也坚决不会像看短剧一样，
-                <br />
+                <br className="br-md" />
                 在聊天过程中出现突然的付费解锁。
               </p>
               <p className="fade-up fade-up-delay-2">
                 之所以这样，是因为我们觉得
-                <br />
+                <br className="br-md" />
                 &ldquo;想找个人说说话&rdquo;这件事并不应该有门槛。
               </p>
               <p className="fade-up fade-up-delay-3">
                 你已经鼓起勇气来这里了，
-                <br />
+                <br className="br-md" />
                 这已经很勇敢了。
               </p>
             </div>
@@ -277,18 +277,18 @@ export default function HomePage() {
             <h2 className="text-h2 font-medium tracking-tight fade-up">关于隐私</h2>
             <p className="fade-up fade-up-delay-1">
               我们在这里担保，
-              <br />
+              <br className="br-md" />
               与你的聊天内容坚决不会被以任何途径
-              <br />
+              <br className="br-md" />
               转发或分享给任何人——
             </p>
             <p className="fade-up fade-up-delay-2">不是你的父母、不是你的学校、不是你的公司……</p>
             <p className="fade-up fade-up-delay-3">我们不需要你的真实姓名，不需要你的电话。</p>
             <p className="fade-up fade-up-delay-4">
               聊天记录会在 7 天后自动删除；
-              <br />
+              <br className="br-md" />
               当然，你也可以选择用喜欢的任何形式
-              <br />
+              <br className="br-md" />
               保留我们的对话。
             </p>
             <div className="flex justify-start fade-up fade-up-delay-5">
@@ -298,16 +298,16 @@ export default function HomePage() {
               <p className="fade-up fade-up-delay-5">唯一的例外：</p>
               <p className="fade-up fade-up-delay-5">
                 如果在聊天中出现明确的、紧急的安全风险
-                <br />
+                <br className="br-md" />
                 （比如有伤害自己或他人的行为），
-                <br />
+                <br className="br-md" />
                 Listeners 会引导你联系专业的危机干预资源。
               </p>
               <p className="fade-up fade-up-delay-6">
                 但请放心，
-                <br />
+                <br className="br-md" />
                 我们并不会替你打电话，也不会通知任何人——
-                <br />
+                <br className="br-md" />
                 是否采取这一步，始终由你决定。
               </p>
             </div>
@@ -325,16 +325,16 @@ export default function HomePage() {
             <h2 className="text-h2 font-medium tracking-tight fade-up">倾听者是谁</h2>
             <p className="fade-up fade-up-delay-1">
               我们不是专业心理咨询师，
-              <br />
+              <br className="br-md" />
               也不会这样自称。
             </p>
             <p className="fade-up fade-up-delay-2">
               你我都是普通人，
-              <br />
+              <br className="br-md" />
               但我们知道如何正确地倾听，
-              <br />
+              <br className="br-md" />
               协助进行力所能及的引导，
-              <br />
+              <br className="br-md" />
               帮助给予相对可行的建议。
             </p>
             <div className="fade-up fade-up-delay-3">
@@ -352,16 +352,16 @@ export default function HomePage() {
             </div>
             <p className="fade-up fade-up-delay-4">
               我们能做的事情很有限：
-              <br />
+              <br className="br-md" />
               陪你聊聊天；认真听你的故事；
-              <br />
+              <br className="br-md" />
               必要的时候提醒你
-              <br />
+              <br className="br-md" />
               &ldquo;这个事情可能需要更专业的人&rdquo;。
             </p>
             <p className="fade-up fade-up-delay-5">
               我们不做诊断，不去开药，
-              <br />
+              <br className="br-md" />
               也不会主观替你做任何决定。
             </p>
           </div>
@@ -378,30 +378,30 @@ export default function HomePage() {
             <p className="fade-up">我们会直接告诉你。</p>
             <p className="fade-up fade-up-delay-1">
               不是为了把你推走，
-              <br />
+              <br className="br-md" />
               而是因为有些情况已经超出了
-              <br />
+              <br className="br-md" />
               &ldquo;聊一聊&rdquo;能处理的范围——
             </p>
             <p className="fade-up fade-up-delay-2">
               比如持续很久的情绪低落、
-              <br />
+              <br className="br-md" />
               影响到吃饭睡觉、
-              <br />
+              <br className="br-md" />
               有伤害自己的念头。
             </p>
             <p className="fade-up fade-up-delay-3">
               我们不想耽误你，
-              <br />
+              <br className="br-md" />
               也不想让你受到伤害。
             </p>
             <p className="fade-up fade-up-delay-4">
               如果到了那一步，
-              <br />
+              <br className="br-md" />
               我们会尽力给你一个清晰的下一步方向：
-              <br />
+              <br className="br-md" />
               可以去哪里求助，有哪些渠道可以选择，
-              <br />
+              <br className="br-md" />
               不同情况可以找谁。
             </p>
           </div>

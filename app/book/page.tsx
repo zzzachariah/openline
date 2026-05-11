@@ -133,7 +133,7 @@ export default function BookPage() {
     return (
       <>
         <Nav />
-        <main className="pt-24 pb-16 min-h-screen">
+        <main className="pt-20 sm:pt-24 pb-16 min-h-screen">
           <div className="text-muted text-center py-12">载入中...</div>
         </main>
       </>
@@ -143,10 +143,10 @@ export default function BookPage() {
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
-        <div className="max-w-[640px] mx-auto px-6">
-          <h1 className="text-h2 font-medium tracking-tight mb-2">选择一个时段</h1>
-          <p className="text-caption text-muted mb-10">
+      <main className="pt-20 sm:pt-24 pb-16 min-h-screen">
+        <div className="max-w-[640px] mx-auto px-5 sm:px-6">
+          <h1 className="text-h2-mobile sm:text-h2 font-medium tracking-tight mb-2">选择一个时段</h1>
+          <p className="text-caption text-muted mb-8 sm:mb-10">
             倾诉是 40 分钟。选好时段后，时间到了你和倾听者会进入聊天室。
           </p>
 
@@ -199,20 +199,20 @@ export default function BookPage() {
       <Footer />
 
       {selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:px-4">
           <div
             className="absolute inset-0 bg-black/30"
             onClick={() => !submitting && setSelected(null)}
           />
-          <div className="relative bg-surface border border-border rounded-xl p-7 w-full max-w-[440px]">
+          <div className="relative modal-card w-full max-w-[440px] rounded-b-none sm:rounded-xl pb-safe">
             <button
               onClick={() => !submitting && setSelected(null)}
-              className="absolute top-4 right-4 text-muted hover:text-foreground"
+              className="absolute top-3 right-3 sm:top-4 sm:right-4 inline-flex items-center justify-center w-10 h-10 text-muted hover:text-foreground"
               aria-label="关闭"
             >
               <X size={18} />
             </button>
-            <h3 className="text-[18px] font-medium mb-5">确认预约？</h3>
+            <h3 className="text-[18px] font-medium mb-5 pr-8">确认预约？</h3>
             <div className="space-y-3 text-[14px] mb-6">
               <Row label="倾听者" value={selected.listener.username} />
               <Row

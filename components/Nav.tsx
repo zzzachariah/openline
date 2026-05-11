@@ -82,8 +82,8 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
         showSolid ? "bg-background border-b border-border" : "bg-transparent"
       }`}
     >
-      <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 text-foreground">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2 text-foreground -ml-1 px-1 py-1">
           <Logo size={26} className="text-accent" />
           <span className="text-[15px] font-medium tracking-tight">openline</span>
         </Link>
@@ -158,50 +158,85 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
         </div>
 
         <button
-          className="md:hidden p-2"
+          className="md:hidden inline-flex items-center justify-center w-10 h-10 -mr-2 text-foreground"
           onClick={() => setMenuOpen((v) => !v)}
           aria-label="菜单"
+          aria-expanded={menuOpen}
         >
-          {menuOpen ? <X size={20} /> : <Menu size={20} />}
+          {menuOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
       </div>
 
       {menuOpen && (
-        <div className="md:hidden border-t border-border bg-background">
-          <div className="px-6 py-4 flex flex-col gap-2">
-            <Link href="/" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">介绍</Link>
-            {!user && (
-              <>
-                <Link href="/book" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">预约</Link>
-                <Link href="/login" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">登录</Link>
-              </>
-            )}
-            {user && !user.is_listener && !user.listener_application_at && (
-              <>
-                <Link href="/book" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">预约</Link>
-                <Link href="/me" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">我的预约</Link>
-              </>
-            )}
-            {user && !user.is_listener && user.listener_application_at && (
-              <Link href="/listener/pending" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">申请审核中</Link>
-            )}
-            {user && user.is_listener && (
-              <Link href="/listener" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">倾听者后台</Link>
-            )}
-            {user && (
-              <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  logout();
-                }}
-                className="py-2 text-[15px] text-left text-muted"
-              >
-                退出
-              </button>
-            )}
+        <>
+          <div
+            className="md:hidden fixed inset-0 top-14 z-10 bg-background/60 backdrop-blur-sm"
+            onClick={() => setMenuOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="md:hidden relative z-20 border-t border-border bg-background shadow-sm">
+            <div className="px-5 py-3 flex flex-col">
+              {user && (
+                <div className="pb-2 mb-2 border-b border-border">
+                  <div className="text-caption text-muted">已登录</div>
+                  <div className="text-[15px] font-medium tracking-tight">{user.username}</div>
+                </div>
+              )}
+              <MobileMenuLink href="/" onClick={() => setMenuOpen(false)}>介绍</MobileMenuLink>
+              {!user && (
+                <>
+                  <MobileMenuLink href="/book" onClick={() => setMenuOpen(false)}>预约</MobileMenuLink>
+                  <MobileMenuLink href="/login" onClick={() => setMenuOpen(false)}>登录</MobileMenuLink>
+                  <MobileMenuLink href="/listener/signup" onClick={() => setMenuOpen(false)}>申请成为倾听者</MobileMenuLink>
+                </>
+              )}
+              {user && !user.is_listener && !user.listener_application_at && (
+                <>
+                  <MobileMenuLink href="/book" onClick={() => setMenuOpen(false)}>预约</MobileMenuLink>
+                  <MobileMenuLink href="/me" onClick={() => setMenuOpen(false)}>我的预约</MobileMenuLink>
+                </>
+              )}
+              {user && !user.is_listener && user.listener_application_at && (
+                <MobileMenuLink href="/listener/pending" onClick={() => setMenuOpen(false)}>申请审核中</MobileMenuLink>
+              )}
+              {user && user.is_listener && (
+                <MobileMenuLink href="/listener" onClick={() => setMenuOpen(false)}>倾听者后台</MobileMenuLink>
+              )}
+              {user && (
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    logout();
+                  }}
+                  className="text-left py-3 px-1 text-[15px] text-muted hover:text-danger transition-colors"
+                >
+                  退出
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </nav>
+  );
+}
+
+function MobileMenuLink({
+  href,
+  onClick,
+  children,
+}: {
+  href: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      className="py-3 px-1 text-[15px] text-foreground hover:text-accent transition-colors"
+    >
+      {children}
+    </Link>
   );
 }
