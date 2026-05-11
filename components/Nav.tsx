@@ -58,7 +58,19 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
     }
 
     loadUser();
-    const { data: sub } = supabase.auth.onAuthStateChange(() => loadUser());
+    // The callback fires while GoTrueClient still holds its internal lock
+    // (e.g. during signInWithPassword / signOut). Calling loadUser() — which
+    // awaits supabase.auth.getUser() — directly would try to re-acquire the
+    // same non-reentrant lock and deadlock the sign-in, leaving the login
+    // button stuck on "登录中..." (and signup's 15s wrapper firing
+    // "注册完成但登录超时"). Defer to the next microtask so the lock has been
+    // released before we re-enter the auth client.
+    // https://supabase.com/docs/reference/javascript/auth-onauthstatechange
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      setTimeout(() => {
+        if (active) loadUser();
+      }, 0);
+    });
     return () => {
       active = false;
       sub.subscription.unsubscribe();
