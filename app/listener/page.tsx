@@ -194,8 +194,10 @@ export default function ListenerPage() {
             transition={{ duration: 0.45, ease: [0.215, 0.61, 0.355, 1] }}
             className="mb-5 md:mb-6 shrink-0"
           >
-            <h1 className="text-h2 font-medium tracking-tight">倾听者后台</h1>
-            <p className="text-caption text-muted mt-0.5">{username}</p>
+            <h1 className="text-h2 font-medium tracking-tight">
+              你好，{username}
+            </h1>
+            <p className="text-caption text-muted mt-0.5">倾听者后台</p>
           </motion.div>
 
           <motion.div

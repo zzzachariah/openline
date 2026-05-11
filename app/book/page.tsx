@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { CalendarCheck, Clock, MessageSquare, Mic, User2 } from "lucide-react";
 import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
 import MonthCalendar, { DayMeta } from "@/components/Calendar/MonthCalendar";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { formatDayHeader, formatTimeRange } from "@/lib/format";
@@ -151,7 +150,7 @@ export default function BookPage() {
     return (
       <>
         <Nav />
-        <main className="pt-24 pb-16 min-h-screen">
+        <main className="pt-24 pb-16">
           <div className="text-muted text-center py-12">载入中...</div>
         </main>
       </>
@@ -161,7 +160,7 @@ export default function BookPage() {
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
+      <main className="pt-24 pb-16">
         <div className="max-w-5xl mx-auto px-6">
           <motion.div
             initial={{ opacity: 0, y: 8 }}
@@ -254,7 +253,6 @@ export default function BookPage() {
           )}
         </div>
       </main>
-      <Footer />
     </>
   );
 }

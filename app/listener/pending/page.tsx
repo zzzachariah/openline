@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Copy, Check } from "lucide-react";
 import Logo from "@/components/Logo";
 import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
 import { createBrowserClient } from "@/lib/supabase/client";
 
 export default function ListenerPendingPage() {
@@ -74,7 +73,7 @@ export default function ListenerPendingPage() {
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
+      <main className="pt-24 pb-16">
         <div className="max-w-[440px] mx-auto px-6">
           <div className="flex justify-center mb-8">
             <Logo size={40} className="text-accent" />
@@ -123,7 +122,6 @@ export default function ListenerPendingPage() {
           )}
         </div>
       </main>
-      <Footer />
     </>
   );
 }

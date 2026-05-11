@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Copy, Check } from "lucide-react";
 import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
 import BookingCard, { BookingCardData } from "@/components/BookingCard";
 import { createBrowserClient } from "@/lib/supabase/client";
 
@@ -162,7 +161,7 @@ export default function MePage() {
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
+      <main className="pt-24 pb-16">
         <div className="max-w-prose mx-auto px-6">
           {loading ? (
             <div className="text-muted text-center py-12">载入中...</div>
@@ -304,7 +303,6 @@ export default function MePage() {
           )}
         </div>
       </main>
-      <Footer />
     </>
   );
 }
