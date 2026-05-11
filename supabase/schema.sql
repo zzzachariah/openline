@@ -274,12 +274,20 @@ create index if not exists profiles_pending_listener_idx
   on public.profiles(listener_application_at)
   where listener_application_at is not null and is_listener = false;
 
-alter table public.bookings
-  add column if not exists is_saved boolean not null default false;
+-- Prevent a single listener from publishing two slots whose times overlap.
+-- Different listeners are allowed to publish slots at the same time — that is
+-- the supported "multiple listeners on the same slot" scenario.
+create extension if not exists btree_gist;
 
-create index if not exists bookings_is_saved_idx
-  on public.bookings(is_saved)
-  where is_saved = true;
+alter table public.time_slots
+  drop constraint if exists time_slots_no_listener_overlap;
+
+alter table public.time_slots
+  add constraint time_slots_no_listener_overlap
+  exclude using gist (
+    listener_id with =,
+    tstzrange(start_time, end_time, '[)') with &&
+  );
 
 -- =====================================================================
 -- Optional: 7-day message auto-deletion (requires pg_cron extension)
