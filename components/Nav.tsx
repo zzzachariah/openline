@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Logo from "./Logo";
 import { Menu, X, ChevronDown, Sun, Moon } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
@@ -23,7 +23,6 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
   const [user, setUser] = useState<NavUser>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const router = useRouter();
   const pathname = usePathname();
   const { theme, toggle } = useTheme();
 
@@ -62,7 +61,15 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
     }
 
     loadUser();
-    const { data: sub } = supabase.auth.onAuthStateChange(() => loadUser());
+    // The callback fires while GoTrueClient still holds its internal lock
+    // (e.g. during signInWithPassword / signOut). Awaiting getUser() inside it
+    // would re-enter the same non-reentrant lock and deadlock sign-in. Defer
+    // to the next microtask so the lock has been released before we re-enter.
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      setTimeout(() => {
+        if (active) loadUser();
+      }, 0);
+    });
     return () => {
       active = false;
       sub.subscription.unsubscribe();
@@ -71,13 +78,14 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
 
   const showSolid = !transparentOnTop || scrolled;
   const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname?.startsWith(href);
+    href === "/" ? pathname === "/" : !!pathname?.startsWith(href);
 
   async function logout() {
     const supabase = createBrowserClient();
     await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+    // Hard navigation forces a fresh server render so every layout drops the
+    // stale authenticated state and any in-flight RSC requests are cancelled.
+    window.location.assign("/");
   }
 
   return (

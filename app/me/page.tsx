@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import { Copy, Check } from "lucide-react";
 import Nav from "@/components/Nav";
 import BookingCard, { BookingCardData } from "@/components/BookingCard";
@@ -14,6 +15,7 @@ type RawBooking = {
   id: string;
   format: "text" | "voice";
   status: "upcoming" | "completed" | "cancelled";
+  is_saved: boolean | null;
   listener: { username: string } | { username: string }[];
   slot: { start_time: string; end_time: string } | { start_time: string; end_time: string }[];
 };
@@ -26,6 +28,7 @@ export default function MePage() {
   const [tab, setTab] = useState<Tab>("upcoming");
   const [copied, setCopied] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [saveBusyId, setSaveBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30000);
@@ -37,32 +40,42 @@ export default function MePage() {
     async function load() {
       const supabase = createBrowserClient();
       const { data: auth } = await supabase.auth.getUser();
+      if (cancelled) return;
       if (!auth.user) {
-        router.push("/login?redirect=/me");
+        router.replace("/login?redirect=/me");
         return;
       }
       const { data: profile } = await supabase
         .from("profiles")
-        .select("username, is_listener")
+        .select("username, is_listener, listener_application_at")
         .eq("id", auth.user.id)
-        .single();
-      if (!profile) return;
-      if (profile.is_listener) {
-        router.push("/listener");
+        .maybeSingle();
+      if (cancelled) return;
+      if (!profile) {
+        // Profile missing — can't continue here. Send back to login.
+        router.replace("/login?redirect=/me");
         return;
       }
-      if (cancelled) return;
+      if (profile.is_listener) {
+        router.replace("/listener");
+        return;
+      }
+      if (profile.listener_application_at) {
+        router.replace("/listener/pending");
+        return;
+      }
       setUsername(profile.username);
 
       const { data: rows } = await supabase
         .from("bookings")
         .select(
-          "id, format, status, listener:profiles!bookings_listener_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
+          "id, format, status, is_saved, listener:profiles!bookings_listener_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
         )
         .eq("user_id", auth.user.id)
         .order("created_at", { ascending: false });
 
-      if (!cancelled && rows) {
+      if (cancelled) return;
+      if (rows) {
         const mapped: BookingCardData[] = (rows as RawBooking[]).map((r) => {
           const listener = Array.isArray(r.listener) ? r.listener[0] : r.listener;
           const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
@@ -73,6 +86,7 @@ export default function MePage() {
             counterpartyUsername: listener.username,
             startTime: slot.start_time,
             endTime: slot.end_time,
+            isSaved: !!r.is_saved,
           };
         });
         setBookings(mapped);
@@ -99,8 +113,7 @@ export default function MePage() {
   async function logout() {
     const supabase = createBrowserClient();
     await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+    window.location.assign("/");
   }
 
   async function cancelBooking(id: string) {
@@ -122,6 +135,27 @@ export default function MePage() {
     setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: "cancelled" } : b)));
   }
 
+  async function toggleSaved(id: string) {
+    const current = bookings.find((b) => b.id === id);
+    if (!current || saveBusyId) return;
+    const next = !current.isSaved;
+    setSaveBusyId(id);
+    // Optimistic flip
+    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, isSaved: next } : b)));
+    const supabase = createBrowserClient();
+    const { error } = await supabase
+      .from("bookings")
+      .update({ is_saved: next })
+      .eq("id", id);
+    setSaveBusyId(null);
+    if (error) {
+      // Roll back
+      setBookings((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, isSaved: !next } : b))
+      );
+    }
+  }
+
   const filtered = bookings.filter((b) => b.status === tab);
 
   return (
@@ -133,7 +167,12 @@ export default function MePage() {
             <div className="text-muted text-center py-12">载入中...</div>
           ) : (
             <>
-              <div className="mb-12">
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: [0.215, 0.61, 0.355, 1] }}
+                className="mb-12"
+              >
                 <h1 className="text-h2 font-medium tracking-tight mb-2 flex items-center gap-3 flex-wrap">
                   你好，{username}
                   <button
@@ -141,23 +180,34 @@ export default function MePage() {
                     className="inline-flex items-center gap-1 text-[13px] text-muted hover:text-accent transition-colors px-2 py-1 rounded-md border border-border"
                     aria-label="复制用户名"
                   >
-                    {copied ? (
-                      <>
-                        <Check size={12} />
-                        已复制
-                      </>
-                    ) : (
-                      <>
-                        <Copy size={12} />
-                        复制用户名
-                      </>
-                    )}
+                    <AnimatePresence mode="wait" initial={false}>
+                      <motion.span
+                        key={copied ? "copied" : "copy"}
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 4 }}
+                        transition={{ duration: 0.15 }}
+                        className="inline-flex items-center gap-1"
+                      >
+                        {copied ? (
+                          <>
+                            <Check size={12} />
+                            已复制
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={12} />
+                            复制用户名
+                          </>
+                        )}
+                      </motion.span>
+                    </AnimatePresence>
                   </button>
                 </h1>
                 <p className="text-caption text-muted">
                   记得保存这个用户名——换设备登录时需要它。
                 </p>
-              </div>
+              </motion.div>
 
               <div className="flex gap-1 mb-6 border-b border-border">
                 {(
@@ -170,39 +220,76 @@ export default function MePage() {
                   <button
                     key={t.key}
                     onClick={() => setTab(t.key)}
-                    className={`px-4 py-2 text-[14px] -mb-px border-b-2 transition-colors ${
+                    className={`relative px-4 py-2 text-[14px] -mb-px transition-colors ${
                       tab === t.key
-                        ? "border-accent text-foreground"
-                        : "border-transparent text-muted hover:text-foreground"
+                        ? "text-foreground"
+                        : "text-muted hover:text-foreground"
                     }`}
                   >
                     {t.label}
+                    {tab === t.key && (
+                      <motion.span
+                        layoutId="me-tab-underline"
+                        className="absolute left-0 right-0 -bottom-px h-0.5 bg-accent"
+                        transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                      />
+                    )}
                   </button>
                 ))}
               </div>
 
-              {filtered.length === 0 ? (
-                <div className="card text-center text-muted">
-                  <p className="mb-4">还没有预约。</p>
-                  {tab === "upcoming" && (
-                    <Link href="/book" className="btn-primary">
-                      预约一次倾诉
-                    </Link>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={tab}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.22, ease: [0.215, 0.61, 0.355, 1] }}
+                >
+                  {filtered.length === 0 ? (
+                    <div className="card text-center text-muted">
+                      <p className="mb-4">还没有预约。</p>
+                      {tab === "upcoming" && (
+                        <Link href="/book" className="btn-primary">
+                          预约一次倾诉
+                        </Link>
+                      )}
+                    </div>
+                  ) : (
+                    <motion.div
+                      className="space-y-3"
+                      initial="hidden"
+                      animate="show"
+                      variants={{
+                        show: { transition: { staggerChildren: 0.05 } },
+                      }}
+                    >
+                      {filtered.map((b) => (
+                        <motion.div
+                          key={b.id}
+                          variants={{
+                            hidden: { opacity: 0, y: 8 },
+                            show: { opacity: 1, y: 0 },
+                          }}
+                          transition={{
+                            duration: 0.3,
+                            ease: [0.215, 0.61, 0.355, 1],
+                          }}
+                        >
+                          <BookingCard
+                            booking={b}
+                            now={now}
+                            role="user"
+                            onCancel={() => cancelBooking(b.id)}
+                            onToggleSaved={() => toggleSaved(b.id)}
+                            saveBusy={saveBusyId === b.id}
+                          />
+                        </motion.div>
+                      ))}
+                    </motion.div>
                   )}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {filtered.map((b) => (
-                    <BookingCard
-                      key={b.id}
-                      booking={b}
-                      now={now}
-                      role="user"
-                      onCancel={() => cancelBooking(b.id)}
-                    />
-                  ))}
-                </div>
-              )}
+                </motion.div>
+              </AnimatePresence>
 
               <div className="mt-16 text-center">
                 <button
