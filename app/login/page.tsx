@@ -7,7 +7,7 @@ import { Eye, EyeOff } from "lucide-react";
 import Logo from "@/components/Logo";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
-import { createBrowserClient } from "@/lib/supabase/client";
+import { createBrowserClient, withTimeout } from "@/lib/supabase/client";
 import { usernameToEmail } from "@/lib/username";
 
 function LoginContent() {
@@ -30,38 +30,44 @@ function LoginContent() {
       return;
     }
     setLoading(true);
-    const supabase = createBrowserClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: usernameToEmail(u),
-      password,
-    });
-    if (signInError) {
-      setError("用户名或密码不正确");
-      setLoading(false);
-      return;
-    }
-    // Determine where to send the user
-    const { data: auth } = await supabase.auth.getUser();
-    if (auth.user) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("is_listener, listener_application_at")
-        .eq("id", auth.user.id)
-        .single();
-      let target: string;
-      if (redirect) {
-        target = redirect;
-      } else if (profile?.is_listener) {
-        target = "/listener";
-      } else if (profile?.listener_application_at) {
-        target = "/listener/pending";
-      } else {
-        target = "/me";
+    try {
+      const supabase = createBrowserClient();
+      const { data, error: signInError } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email: usernameToEmail(u),
+          password,
+        }),
+        15000
+      );
+      if (signInError || !data.user) {
+        setError("用户名或密码不正确");
+        return;
+      }
+      // Where to send the user. The destination page re-checks auth itself,
+      // so if this lookup is slow or fails we just fall back to /me.
+      let target = redirect || "/me";
+      if (!redirect) {
+        try {
+          const { data: profile } = await withTimeout(
+            supabase
+              .from("profiles")
+              .select("is_listener, listener_application_at")
+              .eq("id", data.user.id)
+              .single(),
+            8000
+          );
+          if (profile?.is_listener) target = "/listener";
+          else if (profile?.listener_application_at) target = "/listener/pending";
+        } catch {
+          target = "/me";
+        }
       }
       router.push(target);
       router.refresh();
-    } else {
-      router.push("/me");
+    } catch {
+      setError("网络异常，请稍后再试");
+    } finally {
+      setLoading(false);
     }
   }
 

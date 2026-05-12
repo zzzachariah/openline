@@ -6,7 +6,7 @@ import { Copy, Check } from "lucide-react";
 import Logo from "@/components/Logo";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
-import { createBrowserClient } from "@/lib/supabase/client";
+import { createBrowserClient, withTimeout } from "@/lib/supabase/client";
 
 export default function ListenerPendingPage() {
   const router = useRouter();
@@ -17,32 +17,41 @@ export default function ListenerPendingPage() {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const supabase = createBrowserClient();
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) {
-        router.push("/login?redirect=/listener/pending");
-        return;
-      }
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("username, is_listener, listener_application_at")
-        .eq("id", auth.user.id)
-        .single();
-      if (!profile) return;
-      if (cancelled) return;
+      try {
+        const supabase = createBrowserClient();
+        const { data: auth } = await withTimeout(supabase.auth.getUser(), 12000);
+        if (cancelled) return;
+        if (!auth.user) {
+          router.push("/login?redirect=/listener/pending");
+          return;
+        }
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("username, is_listener, listener_application_at")
+          .eq("id", auth.user.id)
+          .single();
+        if (cancelled) return;
+        if (!profile) {
+          router.push("/login?redirect=/listener/pending");
+          return;
+        }
 
-      // Already approved — go to the listener dashboard.
-      if (profile.is_listener) {
-        router.push("/listener");
-        return;
+        // Already approved — go to the listener dashboard.
+        if (profile.is_listener) {
+          router.push("/listener");
+          return;
+        }
+        // Never applied — they're a regular user.
+        if (!profile.listener_application_at) {
+          router.push("/me");
+          return;
+        }
+        setUsername(profile.username);
+      } catch {
+        if (!cancelled) router.push("/login?redirect=/listener/pending");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      // Never applied — they're a regular user.
-      if (!profile.listener_application_at) {
-        router.push("/me");
-        return;
-      }
-      setUsername(profile.username);
-      setLoading(false);
     }
     load();
     return () => {

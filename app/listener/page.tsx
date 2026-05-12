@@ -6,7 +6,7 @@ import { Plus, X } from "lucide-react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import BookingCard, { BookingCardData } from "@/components/BookingCard";
-import { createBrowserClient } from "@/lib/supabase/client";
+import { createBrowserClient, withTimeout } from "@/lib/supabase/client";
 import { formatDayHeader, formatDayKey, formatTime, formatTimeRange } from "@/lib/format";
 
 type Slot = {
@@ -42,59 +42,68 @@ export default function ListenerPage() {
   }, []);
 
   async function reload() {
-    const supabase = createBrowserClient();
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) {
-      router.push("/login?redirect=/listener");
-      return;
-    }
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("username, is_listener, listener_application_at")
-      .eq("id", auth.user.id)
-      .single();
-    if (!profile?.is_listener) {
-      if (profile?.listener_application_at) {
-        router.push("/listener/pending");
-      } else {
-        router.push("/me");
+    try {
+      const supabase = createBrowserClient();
+      const { data: auth } = await withTimeout(supabase.auth.getUser(), 12000);
+      if (!auth.user) {
+        router.push("/login?redirect=/listener");
+        return;
       }
-      return;
-    }
-    setUsername(profile.username);
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("username, is_listener, listener_application_at")
+        .eq("id", auth.user.id)
+        .single();
+      if (!profile) {
+        router.push("/login?redirect=/listener");
+        return;
+      }
+      if (!profile.is_listener) {
+        if (profile.listener_application_at) {
+          router.push("/listener/pending");
+        } else {
+          router.push("/me");
+        }
+        return;
+      }
+      setUsername(profile.username);
 
-    const nowIso = new Date().toISOString();
-    const { data: slotRows } = await supabase
-      .from("time_slots")
-      .select("id, start_time, end_time, is_booked")
-      .eq("listener_id", auth.user.id)
-      .gte("end_time", nowIso)
-      .order("start_time", { ascending: true });
-    setSlots(slotRows || []);
+      const nowIso = new Date().toISOString();
+      const { data: slotRows } = await supabase
+        .from("time_slots")
+        .select("id, start_time, end_time, is_booked")
+        .eq("listener_id", auth.user.id)
+        .gte("end_time", nowIso)
+        .order("start_time", { ascending: true });
+      setSlots(slotRows || []);
 
-    const { data: bookingRows } = await supabase
-      .from("bookings")
-      .select(
-        "id, format, status, user:profiles!bookings_user_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
-      )
-      .eq("listener_id", auth.user.id)
-      .order("created_at", { ascending: false });
-    if (bookingRows) {
-      const mapped: BookingCardData[] = (bookingRows as RawBooking[]).map((r) => {
-        const user = Array.isArray(r.user) ? r.user[0] : r.user;
-        const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
-        return {
-          id: r.id,
-          format: r.format,
-          status: r.status,
-          counterpartyUsername: user.username,
-          startTime: slot.start_time,
-          endTime: slot.end_time,
-        };
-      });
-      setBookings(mapped);
+      const { data: bookingRows } = await supabase
+        .from("bookings")
+        .select(
+          "id, format, status, user:profiles!bookings_user_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
+        )
+        .eq("listener_id", auth.user.id)
+        .order("created_at", { ascending: false });
+      if (bookingRows) {
+        const mapped: BookingCardData[] = (bookingRows as RawBooking[]).map((r) => {
+          const user = Array.isArray(r.user) ? r.user[0] : r.user;
+          const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
+          return {
+            id: r.id,
+            format: r.format,
+            status: r.status,
+            counterpartyUsername: user.username,
+            startTime: slot.start_time,
+            endTime: slot.end_time,
+          };
+        });
+        setBookings(mapped);
+      }
+    } catch {
+      router.push("/login?redirect=/listener");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   useEffect(() => {

@@ -7,7 +7,7 @@ import { Copy, Check } from "lucide-react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import BookingCard, { BookingCardData } from "@/components/BookingCard";
-import { createBrowserClient } from "@/lib/supabase/client";
+import { createBrowserClient, withTimeout } from "@/lib/supabase/client";
 
 type Tab = "upcoming" | "completed" | "cancelled";
 
@@ -36,49 +36,58 @@ export default function MePage() {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const supabase = createBrowserClient();
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) {
-        router.push("/login?redirect=/me");
-        return;
-      }
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("username, is_listener")
-        .eq("id", auth.user.id)
-        .single();
-      if (!profile) return;
-      if (profile.is_listener) {
-        router.push("/listener");
-        return;
-      }
-      if (cancelled) return;
-      setUsername(profile.username);
+      try {
+        const supabase = createBrowserClient();
+        const { data: auth } = await withTimeout(supabase.auth.getUser(), 12000);
+        if (cancelled) return;
+        if (!auth.user) {
+          router.push("/login?redirect=/me");
+          return;
+        }
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("username, is_listener")
+          .eq("id", auth.user.id)
+          .single();
+        if (cancelled) return;
+        if (!profile) {
+          router.push("/login?redirect=/me");
+          return;
+        }
+        if (profile.is_listener) {
+          router.push("/listener");
+          return;
+        }
+        setUsername(profile.username);
 
-      const { data: rows } = await supabase
-        .from("bookings")
-        .select(
-          "id, format, status, listener:profiles!bookings_listener_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
-        )
-        .eq("user_id", auth.user.id)
-        .order("created_at", { ascending: false });
+        const { data: rows } = await supabase
+          .from("bookings")
+          .select(
+            "id, format, status, listener:profiles!bookings_listener_id_fkey(username), slot:time_slots!bookings_slot_id_fkey(start_time, end_time)"
+          )
+          .eq("user_id", auth.user.id)
+          .order("created_at", { ascending: false });
 
-      if (!cancelled && rows) {
-        const mapped: BookingCardData[] = (rows as RawBooking[]).map((r) => {
-          const listener = Array.isArray(r.listener) ? r.listener[0] : r.listener;
-          const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
-          return {
-            id: r.id,
-            format: r.format,
-            status: r.status,
-            counterpartyUsername: listener.username,
-            startTime: slot.start_time,
-            endTime: slot.end_time,
-          };
-        });
-        setBookings(mapped);
+        if (!cancelled && rows) {
+          const mapped: BookingCardData[] = (rows as RawBooking[]).map((r) => {
+            const listener = Array.isArray(r.listener) ? r.listener[0] : r.listener;
+            const slot = Array.isArray(r.slot) ? r.slot[0] : r.slot;
+            return {
+              id: r.id,
+              format: r.format,
+              status: r.status,
+              counterpartyUsername: listener.username,
+              startTime: slot.start_time,
+              endTime: slot.end_time,
+            };
+          });
+          setBookings(mapped);
+        }
+      } catch {
+        if (!cancelled) router.push("/login?redirect=/me");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setLoading(false);
     }
     load();
     return () => {

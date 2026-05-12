@@ -7,7 +7,7 @@ import { Eye, EyeOff, Check, Copy } from "lucide-react";
 import Logo from "@/components/Logo";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
-import { createBrowserClient } from "@/lib/supabase/client";
+import { createBrowserClient, withTimeout } from "@/lib/supabase/client";
 import { usernameToEmail } from "@/lib/username";
 
 function SignupContent() {
@@ -46,26 +46,29 @@ function SignupContent() {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "注册失败，请稍后再试");
-        setLoading(false);
         return;
       }
 
       const username = data.username as string;
-      // Sign in immediately so the session is set
-      const supabase = createBrowserClient();
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: usernameToEmail(username),
-        password,
-      });
-      if (signInError) {
-        setError("注册成功但登录失败，请前往登录页");
-        setLoading(false);
-        return;
+      // Sign in immediately so the session is set. If this stalls or fails the
+      // account still exists — show the username so they can log in manually
+      // (the success screen's "继续" button routes through /login if needed).
+      try {
+        const supabase = createBrowserClient();
+        await withTimeout(
+          supabase.auth.signInWithPassword({
+            email: usernameToEmail(username),
+            password,
+          }),
+          15000
+        );
+      } catch {
+        // ignore — username is shown below regardless
       }
       setCreated(username);
-      setLoading(false);
     } catch {
       setError("网络错误，请稍后再试");
+    } finally {
       setLoading(false);
     }
   }
