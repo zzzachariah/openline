@@ -45,22 +45,30 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
     const supabase = createBrowserClient();
     let active = true;
 
-    async function loadUser() {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) {
-        if (active) setUser(null);
-        return;
-      }
+    async function loadProfile(userId: string) {
       const { data: profile } = await supabase
         .from("profiles")
         .select("username, is_listener, listener_application_at")
-        .eq("id", auth.user.id)
+        .eq("id", userId)
         .single();
-      if (active && profile) setUser(profile as NavUser);
+      if (active) setUser((profile as NavUser) ?? null);
     }
 
-    loadUser();
-    const { data: sub } = supabase.auth.onAuthStateChange(() => loadUser());
+    // onAuthStateChange emits INITIAL_SESSION on subscribe, so this also
+    // handles the first load. The callback runs while auth-js still holds its
+    // internal lock, so we must NOT await any Supabase call here — defer the
+    // profile fetch to a separate task or it deadlocks login/signup.
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      if (!session?.user) {
+        setUser(null);
+        return;
+      }
+      const userId = session.user.id;
+      setTimeout(() => {
+        if (active) loadProfile(userId);
+      }, 0);
+    });
     return () => {
       active = false;
       sub.subscription.unsubscribe();
