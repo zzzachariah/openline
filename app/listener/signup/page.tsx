@@ -2,17 +2,16 @@
 
 import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Check, Copy } from "lucide-react";
 import Logo from "@/components/Logo";
 import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
-import { createBrowserClient, withTimeout } from "@/lib/supabase/client";
+import { createBrowserClient } from "@/lib/supabase/client";
 import { usernameToEmail } from "@/lib/username";
+import { TimeoutError, withTimeout } from "@/lib/with-timeout";
+
+const SIGNUP_TIMEOUT_MS = 15_000;
 
 function ListenerSignupContent() {
-  const router = useRouter();
-
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [show, setShow] = useState(false);
@@ -36,36 +35,52 @@ function ListenerSignupContent() {
 
     setLoading(true);
     try {
-      const res = await fetch("/api/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password, role: "listener" }),
-      });
-      const data = await res.json();
+      const res = await withTimeout(
+        fetch("/api/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password, role: "listener" }),
+        }),
+        SIGNUP_TIMEOUT_MS,
+        "注册超时（15 秒未响应），请检查网络后重试"
+      );
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error || "注册失败，请稍后再试");
+        setError(data?.error || `注册失败（${res.status}），请稍后再试`);
         return;
       }
 
-      const username = data.username as string;
-      // Sign in immediately so the listener lands on the pending page. If this
-      // stalls or fails the account still exists — show the username regardless
-      // so they can log in manually after.
-      try {
-        const supabase = createBrowserClient();
-        await withTimeout(
-          supabase.auth.signInWithPassword({
-            email: usernameToEmail(username),
-            password,
-          }),
-          15000
-        );
-      } catch {
-        // ignore — username is shown below regardless
+      const username = data?.username as string | undefined;
+      if (!username) {
+        setError("注册返回数据异常，请稍后再试");
+        return;
+      }
+
+      // Sign in immediately so the listener lands on the pending page.
+      const supabase = createBrowserClient();
+      const { error: signInError } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email: usernameToEmail(username),
+          password,
+        }),
+        SIGNUP_TIMEOUT_MS,
+        "注册成功但登录超时，请前往登录页用此用户名登录"
+      );
+      if (signInError) {
+        // Account exists but sign-in failed; still show the username so they
+        // can log in manually after.
+        setCreated(username);
+        return;
       }
       setCreated(username);
-    } catch {
-      setError("网络错误，请稍后再试");
+    } catch (err) {
+      if (err instanceof TimeoutError) {
+        setError(err.message);
+      } else if (err instanceof Error) {
+        setError(`注册失败：${err.message}`);
+      } else {
+        setError("网络错误，请稍后再试");
+      }
     } finally {
       setLoading(false);
     }
@@ -85,9 +100,9 @@ function ListenerSignupContent() {
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
-        <div className="max-w-[400px] mx-auto px-6">
-          <div className="flex justify-center mb-8">
+      <main className="pt-20 sm:pt-24 pb-16">
+        <div className="max-w-[400px] mx-auto px-5 sm:px-6">
+          <div className="flex justify-center mb-6 sm:mb-8">
             <Logo size={40} className="text-accent" />
           </div>
 
@@ -100,6 +115,8 @@ function ListenerSignupContent() {
                 我们不需要你的姓名、邮箱或电话。
                 <br />
                 注册后我们会人工审核你的申请。
+                <br />
+                请联系 zzzachariah9828@gmail.com，邮件必须包含用户名以及申请原因。
               </p>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="relative">
@@ -179,7 +196,7 @@ function ListenerSignupContent() {
                 </button>
               </div>
               <button
-                onClick={() => router.push("/listener/pending")}
+                onClick={() => window.location.assign("/listener/pending")}
                 className="btn-primary w-full"
               >
                 查看审核状态 →
@@ -188,7 +205,6 @@ function ListenerSignupContent() {
           )}
         </div>
       </main>
-      <Footer />
     </>
   );
 }

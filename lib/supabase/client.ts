@@ -3,35 +3,29 @@
 import { createBrowserClient as createSupabaseBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-// Reuse a single browser client across the whole app. Creating a new client on
-// every call spins up another GoTrueClient, and multiple GoTrueClients fighting
-// over the same auth-token lock is what makes login/signup appear to hang.
-let browserClient: SupabaseClient | undefined;
+// One shared client per browser tab. Multiple SupabaseClient instances each
+// spin up their own GoTrueClient, and those GoTrueClients coordinate via
+// `navigator.locks` on a storage key derived from the project URL. With
+// several components (Nav, ListenerPage, AddSlotModal, ...) calling
+// `createBrowserClient()` independently, concurrent `auth.getUser()` calls
+// pile up on that shared lock; a token-refresh attempt can starve or
+// deadlock the queue, which is why the listener dashboard would hang and
+// the 10s wrapper would fire "获取登录状态超时". Reusing one instance keeps
+// auth state in a single GoTrueClient and avoids the contention.
+let client: SupabaseClient | undefined;
 
 export function createBrowserClient(): SupabaseClient {
-  if (browserClient) return browserClient;
-  browserClient = createSupabaseBrowserClient(
+  if (client) return client;
+  client = createSupabaseBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-  return browserClient;
-}
-
-// Safety net so a stalled auth/db call can never leave a button stuck on
-// "登录中..." forever. Rejects with a timeout error once `ms` elapses so the
-// caller's catch block can recover.
-export function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("操作超时")), ms);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookieOptions: {
+        sameSite: "lax",
+        secure: typeof window !== "undefined" && window.location.protocol === "https:",
+        path: "/",
       },
-      (err) => {
-        clearTimeout(timer);
-        reject(err);
-      }
-    );
-  });
+    }
+  );
+  return client;
 }

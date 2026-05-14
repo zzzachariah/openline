@@ -2,16 +2,17 @@
 
 import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Eye, EyeOff, Check, Copy } from "lucide-react";
 import Logo from "@/components/Logo";
 import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
-import { createBrowserClient, withTimeout } from "@/lib/supabase/client";
+import { createBrowserClient } from "@/lib/supabase/client";
 import { usernameToEmail } from "@/lib/username";
+import { TimeoutError, withTimeout } from "@/lib/with-timeout";
+
+const SIGNUP_TIMEOUT_MS = 15_000;
 
 function SignupContent() {
-  const router = useRouter();
   const params = useSearchParams();
   const redirect = params.get("redirect") || "/me";
 
@@ -38,36 +39,54 @@ function SignupContent() {
 
     setLoading(true);
     try {
-      const res = await fetch("/api/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      const data = await res.json();
+      const res = await withTimeout(
+        fetch("/api/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password }),
+        }),
+        SIGNUP_TIMEOUT_MS,
+        "注册超时（15 秒未响应），请检查网络后重试"
+      );
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error || "注册失败，请稍后再试");
+        setError(data?.error || `注册失败（${res.status}），请稍后再试`);
         return;
       }
 
-      const username = data.username as string;
-      // Sign in immediately so the session is set. If this stalls or fails the
-      // account still exists — show the username so they can log in manually
-      // (the success screen's "继续" button routes through /login if needed).
-      try {
-        const supabase = createBrowserClient();
-        await withTimeout(
-          supabase.auth.signInWithPassword({
-            email: usernameToEmail(username),
-            password,
-          }),
-          15000
-        );
-      } catch {
-        // ignore — username is shown below regardless
+      const username = data?.username as string | undefined;
+      if (!username) {
+        setError("注册返回数据异常，请稍后再试");
+        return;
+      }
+
+      // Sign in immediately so the session is set
+      const supabase = createBrowserClient();
+      const { error: signInError } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email: usernameToEmail(username),
+          password,
+        }),
+        SIGNUP_TIMEOUT_MS,
+        "注册完成但登录超时，请前往登录页"
+      );
+      if (signInError) {
+        // Account was created successfully; sign-in failed for some reason
+        // (network blip, lock contention). Still surface the username so the
+        // user can save it and log in manually instead of being stuck on the
+        // form with no feedback about whether the account exists.
+        setCreated(username);
+        return;
       }
       setCreated(username);
-    } catch {
-      setError("网络错误，请稍后再试");
+    } catch (err) {
+      if (err instanceof TimeoutError) {
+        setError(err.message);
+      } else if (err instanceof Error) {
+        setError(`注册失败：${err.message}`);
+      } else {
+        setError("网络错误，请稍后再试");
+      }
     } finally {
       setLoading(false);
     }
@@ -87,9 +106,9 @@ function SignupContent() {
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
-        <div className="max-w-[400px] mx-auto px-6">
-          <div className="flex justify-center mb-8">
+      <main className="pt-20 sm:pt-24 pb-16">
+        <div className="max-w-[400px] mx-auto px-5 sm:px-6">
+          <div className="flex justify-center mb-6 sm:mb-8">
             <Logo size={40} className="text-accent" />
           </div>
 
@@ -176,7 +195,7 @@ function SignupContent() {
                 换设备登录时需要它。
               </p>
               <button
-                onClick={() => router.push(redirect)}
+                onClick={() => window.location.assign(redirect)}
                 className="btn-primary w-full"
               >
                 继续 →
@@ -185,7 +204,6 @@ function SignupContent() {
           )}
         </div>
       </main>
-      <Footer />
     </>
   );
 }

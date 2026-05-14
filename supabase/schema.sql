@@ -47,11 +47,14 @@ create table if not exists public.bookings (
   slot_id       uuid not null references public.time_slots(id) on delete restrict,
   format        booking_format not null default 'text',
   status        booking_status not null default 'upcoming',
+  is_saved      boolean not null default false,
   created_at    timestamptz not null default now()
 );
 
 create index if not exists bookings_user_idx     on public.bookings(user_id);
 create index if not exists bookings_listener_idx on public.bookings(listener_id);
+create index if not exists bookings_is_saved_idx on public.bookings(is_saved)
+  where is_saved = true;
 
 -- Prevent two active bookings on the same slot.
 -- Cancelled bookings are excluded so a slot can be re-booked after a cancellation.
@@ -73,6 +76,23 @@ create table if not exists public.messages (
 );
 
 create index if not exists messages_booking_idx on public.messages(booking_id, created_at);
+
+-- Reviews: one per completed booking. Users write `comment`; listeners may add `listener_reply`.
+create table if not exists public.reviews (
+  id              uuid primary key default gen_random_uuid(),
+  booking_id      uuid not null unique references public.bookings(id) on delete cascade,
+  user_id         uuid not null references public.profiles(id) on delete cascade,
+  listener_id     uuid not null references public.profiles(id) on delete cascade,
+  comment         text not null,
+  listener_reply  text,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+  replied_at      timestamptz,
+  constraint reviews_comment_not_blank check (length(btrim(comment)) > 0)
+);
+
+create index if not exists reviews_listener_idx on public.reviews(listener_id, created_at desc);
+create index if not exists reviews_user_idx     on public.reviews(user_id, created_at desc);
 
 -- Homepage counter
 create table if not exists public.stats (
@@ -108,6 +128,46 @@ create trigger bookings_increment_counter
   after insert on public.bookings
   for each row execute function public.increment_booking_counter();
 
+-- Reviews update guard: users can only modify `comment`, listeners only `listener_reply`.
+-- Also maintains updated_at / replied_at automatically.
+create or replace function public.guard_review_update()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.id <> old.id
+     or new.booking_id <> old.booking_id
+     or new.user_id <> old.user_id
+     or new.listener_id <> old.listener_id
+     or new.created_at <> old.created_at then
+    raise exception 'reviews: cannot modify identifying fields';
+  end if;
+
+  if auth.uid() = old.user_id and auth.uid() <> old.listener_id then
+    if new.listener_reply is distinct from old.listener_reply then
+      raise exception 'reviews: only the listener can change listener_reply';
+    end if;
+  elsif auth.uid() = old.listener_id and auth.uid() <> old.user_id then
+    if new.comment is distinct from old.comment then
+      raise exception 'reviews: only the reviewer can change comment';
+    end if;
+  end if;
+
+  new.updated_at := now();
+  if new.listener_reply is distinct from old.listener_reply then
+    new.replied_at := case when new.listener_reply is null then null else now() end;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists reviews_guard_update on public.reviews;
+create trigger reviews_guard_update
+  before update on public.reviews
+  for each row execute function public.guard_review_update();
+
 -- =====================================================================
 -- Row Level Security
 -- =====================================================================
@@ -116,6 +176,7 @@ alter table public.profiles    enable row level security;
 alter table public.time_slots  enable row level security;
 alter table public.bookings    enable row level security;
 alter table public.messages    enable row level security;
+alter table public.reviews     enable row level security;
 alter table public.stats       enable row level security;
 
 -- Profiles
@@ -225,6 +286,47 @@ create policy "messages: parties write"
     )
   );
 
+-- Reviews
+-- Anyone authenticated can read reviews (browsing listeners before booking).
+drop policy if exists "reviews: read all auth" on public.reviews;
+create policy "reviews: read all auth"
+  on public.reviews for select to authenticated
+  using (true);
+
+-- The reviewer (user) may create a review for their own completed booking.
+drop policy if exists "reviews: reviewer inserts own" on public.reviews;
+create policy "reviews: reviewer inserts own"
+  on public.reviews for insert to authenticated
+  with check (
+    user_id = auth.uid()
+    and exists (
+      select 1 from public.bookings b
+       where b.id = booking_id
+         and b.user_id = auth.uid()
+         and b.listener_id = reviews.listener_id
+         and b.status = 'completed'
+    )
+  );
+
+-- Reviewer can edit/delete their own review; listener can edit replies on reviews about them.
+-- The before-update trigger restricts which columns each party may change.
+drop policy if exists "reviews: reviewer updates own" on public.reviews;
+create policy "reviews: reviewer updates own"
+  on public.reviews for update to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+drop policy if exists "reviews: listener replies" on public.reviews;
+create policy "reviews: listener replies"
+  on public.reviews for update to authenticated
+  using (listener_id = auth.uid())
+  with check (listener_id = auth.uid());
+
+drop policy if exists "reviews: reviewer deletes own" on public.reviews;
+create policy "reviews: reviewer deletes own"
+  on public.reviews for delete to authenticated
+  using (user_id = auth.uid());
+
 -- Stats: read-only public counter
 drop policy if exists "stats: public read" on public.stats;
 create policy "stats: public read"
@@ -249,15 +351,41 @@ create index if not exists profiles_pending_listener_idx
   on public.profiles(listener_application_at)
   where listener_application_at is not null and is_listener = false;
 
+-- Prevent a single listener from publishing two slots whose times overlap.
+-- Different listeners are allowed to publish slots at the same time — that is
+-- the supported "multiple listeners on the same slot" scenario.
+create extension if not exists btree_gist;
+
+alter table public.time_slots
+  drop constraint if exists time_slots_no_listener_overlap;
+
+alter table public.time_slots
+  add constraint time_slots_no_listener_overlap
+  exclude using gist (
+    listener_id with =,
+    tstzrange(start_time, end_time, '[)') with &&
+  );
+
 -- =====================================================================
 -- Optional: 7-day message auto-deletion (requires pg_cron extension)
 -- =====================================================================
--- Run separately if you want auto-deletion. Uncomment after enabling pg_cron.
+-- The privacy promise on the homepage is: messages are deleted after 7 days
+-- unless the user (倾诉者) marks the chat as saved. The booking row itself
+-- (the "倾听记录") is kept either way.
+--
+-- Uncomment after enabling pg_cron, then run these in the SQL Editor.
 --
 -- create extension if not exists pg_cron;
 --
 -- select cron.schedule(
 --   'delete-old-messages',
 --   '0 3 * * *',
---   $$ delete from public.messages where created_at < now() - interval '7 days' $$
+--   $$
+--     delete from public.messages m
+--      where m.created_at < now() - interval '7 days'
+--        and not exists (
+--          select 1 from public.bookings b
+--           where b.id = m.booking_id and b.is_saved = true
+--        )
+--   $$
 -- );

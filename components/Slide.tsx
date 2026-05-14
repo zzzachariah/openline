@@ -50,16 +50,16 @@ const Slide = forwardRef<HTMLElement, SlideProps>(function Slide(
       }}
       aria-label={ariaLabel}
       data-visible={dataVisible}
-      className={`snap-slide relative px-6 slide ${className}`}
+      className={`snap-slide relative px-5 sm:px-6 slide ${className}`}
     >
-      <div className="w-full max-w-prose mx-auto py-24">{children}</div>
+      <div className="w-full max-w-prose mx-auto py-20 sm:py-24">{children}</div>
 
       {hasChevron && (
         <button
           type="button"
           onClick={onChevronClick}
           aria-label="向下滚动"
-          className="absolute bottom-10 left-1/2 -translate-x-1/2 text-muted hover:text-foreground transition-colors"
+          className="absolute bottom-20 sm:bottom-10 left-1/2 -translate-x-1/2 text-muted hover:text-foreground transition-colors p-2 -m-2"
         >
           <ChevronDown size={20} className="chevron-hint" />
         </button>

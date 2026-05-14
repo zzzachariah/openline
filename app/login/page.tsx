@@ -2,16 +2,21 @@
 
 import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import Logo from "@/components/Logo";
 import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
-import { createBrowserClient, withTimeout } from "@/lib/supabase/client";
+import { createBrowserClient } from "@/lib/supabase/client";
 import { usernameToEmail } from "@/lib/username";
+import { TimeoutError, withTimeout } from "@/lib/with-timeout";
+
+// Generous enough that a slow mobile connection won't trip it, but short enough
+// to recover from a wedged GoTrueClient (rare) without the user staring at
+// "登录中..." indefinitely.
+const LOGIN_TIMEOUT_MS = 25_000;
+const PROFILE_LOOKUP_TIMEOUT_MS = 6_000;
 
 function LoginContent() {
-  const router = useRouter();
   const params = useSearchParams();
   const redirect = params.get("redirect");
 
@@ -32,41 +37,61 @@ function LoginContent() {
     setLoading(true);
     try {
       const supabase = createBrowserClient();
-      const { data, error: signInError } = await withTimeout(
+      const { data: signInData, error: signInError } = await withTimeout(
         supabase.auth.signInWithPassword({
           email: usernameToEmail(u),
           password,
         }),
-        15000
+        LOGIN_TIMEOUT_MS,
+        "登录超时，请检查网络后重试"
       );
-      if (signInError || !data.user) {
+      if (signInError || !signInData.user) {
         setError("用户名或密码不正确");
+        setLoading(false);
         return;
       }
-      // Where to send the user. The destination page re-checks auth itself,
-      // so if this lookup is slow or fails we just fall back to /me.
-      let target = redirect || "/me";
-      if (!redirect) {
+
+      // Determine where to send the user. Use the user we just signed in with
+      // directly (avoid an extra getUser() roundtrip that can hang) and use
+      // maybeSingle() so a missing profile row never blocks navigation. The
+      // lookup itself is wrapped in a short timeout: if it stalls we fall back
+      // to /me so the user is never stuck on "登录中...".
+      let target = "/me";
+      if (redirect) {
+        target = redirect;
+      } else {
         try {
           const { data: profile } = await withTimeout(
             supabase
               .from("profiles")
               .select("is_listener, listener_application_at")
-              .eq("id", data.user.id)
-              .single(),
-            8000
+              .eq("id", signInData.user.id)
+              .maybeSingle(),
+            PROFILE_LOOKUP_TIMEOUT_MS
           );
-          if (profile?.is_listener) target = "/listener";
-          else if (profile?.listener_application_at) target = "/listener/pending";
+          if (profile?.is_listener) {
+            target = "/listener";
+          } else if (profile?.listener_application_at) {
+            target = "/listener/pending";
+          }
         } catch {
-          target = "/me";
+          // Profile lookup failed or timed out — /me will route correctly on
+          // the server side, so just continue.
         }
       }
-      router.push(target);
-      router.refresh();
-    } catch {
-      setError("网络异常，请稍后再试");
-    } finally {
+
+      // Hard navigation guarantees the destination server component re-renders
+      // with the auth cookies that signInWithPassword just set. router.push
+      // can race with cookie propagation and leave the page in a stale state.
+      window.location.assign(target);
+    } catch (err) {
+      if (err instanceof TimeoutError) {
+        setError(err.message);
+      } else if (err instanceof Error && err.message) {
+        setError(`登录失败：${err.message}`);
+      } else {
+        setError("登录失败，请稍后再试");
+      }
       setLoading(false);
     }
   }
@@ -74,9 +99,9 @@ function LoginContent() {
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
-        <div className="max-w-[400px] mx-auto px-6">
-          <div className="flex justify-center mb-8">
+      <main className="pt-20 sm:pt-24 pb-16">
+        <div className="max-w-[400px] mx-auto px-5 sm:px-6">
+          <div className="flex justify-center mb-6 sm:mb-8">
             <Logo size={40} className="text-accent" />
           </div>
           <div className="card">
@@ -90,7 +115,7 @@ function LoginContent() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="input"
-                placeholder="用户名（如 匿名用户A3K9P2）"
+                placeholder="用户名（如 匿名用户A3K9P2 或 匿名倾听者A3K9P2）"
                 autoFocus
                 autoComplete="username"
               />
@@ -139,7 +164,6 @@ function LoginContent() {
           </div>
         </div>
       </main>
-      <Footer />
     </>
   );
 }

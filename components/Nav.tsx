@@ -2,33 +2,43 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import Logo from "./Logo";
-import { Menu, X, ChevronDown } from "lucide-react";
+import { Menu, X, ChevronDown, Sun, Moon } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
+import { useTheme } from "./ThemeProvider";
 
-type NavUser = {
+export type NavUserShape = {
   username: string;
   is_listener: boolean;
   listener_application_at: string | null;
-} | null;
+};
+
+type NavUser = NavUserShape | null;
 
 type NavProps = {
   transparentOnTop?: boolean;
+  // When provided (even as null), the server has already determined the auth
+  // state for this request and Nav skips the client-side getUser/profile
+  // roundtrip on mount. Auth-protected server pages should always pass this so
+  // the navbar matches the rest of the server-rendered shell on first paint;
+  // pages without a server-side auth check (homepage, /login, /signup) can
+  // omit it and Nav falls back to the client-side discovery flow.
+  initialUser?: NavUser;
 };
 
-export default function Nav({ transparentOnTop = false }: NavProps) {
+export default function Nav({ transparentOnTop = false, initialUser }: NavProps) {
   const [scrolled, setScrolled] = useState(false);
-  const [user, setUser] = useState<NavUser>(null);
+  const [user, setUser] = useState<NavUser>(initialUser ?? null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const router = useRouter();
+  const pathname = usePathname();
+  const { theme, toggle } = useTheme();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 80);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
-    // The homepage scroll-snap container is also scrollable
     const snap = document.querySelector(".snap-container");
     if (snap) {
       const onSnap = () => setScrolled((snap as HTMLElement).scrollTop > 80);
@@ -45,85 +55,131 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
     const supabase = createBrowserClient();
     let active = true;
 
-    async function loadProfile(userId: string) {
+    async function loadUser() {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) {
+        if (active) setUser(null);
+        return;
+      }
       const { data: profile } = await supabase
         .from("profiles")
         .select("username, is_listener, listener_application_at")
-        .eq("id", userId)
+        .eq("id", auth.user.id)
         .single();
-      if (active) setUser((profile as NavUser) ?? null);
+      if (active && profile) setUser(profile as NavUser);
     }
 
-    // onAuthStateChange emits INITIAL_SESSION on subscribe, so this also
-    // handles the first load. The callback runs while auth-js still holds its
-    // internal lock, so we must NOT await any Supabase call here — defer the
-    // profile fetch to a separate task or it deadlocks login/signup.
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!active) return;
-      if (!session?.user) {
-        setUser(null);
-        return;
-      }
-      const userId = session.user.id;
+    // When the server didn't pre-fill the user, fetch it now. With a
+    // server-known initialUser we skip this entirely — racing the same
+    // getUser+profile chain alongside the SWR queries on the listener
+    // dashboard sometimes left the navbar stuck on "登录" because the profile
+    // .single() result lost the race and the early-out left state at null.
+    if (initialUser === undefined) {
+      loadUser();
+    }
+    // The callback fires while GoTrueClient still holds its internal lock
+    // (e.g. during signInWithPassword / signOut). Awaiting getUser() inside it
+    // would re-enter the same non-reentrant lock and deadlock sign-in. Defer
+    // to the next microtask so the lock has been released before we re-enter.
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      // INITIAL_SESSION fires synchronously when we subscribe. If we already
+      // know who the user is (from props or the loadUser above) re-fetching
+      // here is wasted work that fights for the same lock.
+      if (event === "INITIAL_SESSION") return;
       setTimeout(() => {
-        if (active) loadProfile(userId);
+        if (active) loadUser();
       }, 0);
     });
     return () => {
       active = false;
       sub.subscription.unsubscribe();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const showSolid = !transparentOnTop || scrolled;
+  const isActive = (href: string) =>
+    href === "/" ? pathname === "/" : !!pathname?.startsWith(href);
 
   async function logout() {
     const supabase = createBrowserClient();
     await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+    // Hard navigation forces a fresh server render so every layout drops the
+    // stale authenticated state and any in-flight RSC requests are cancelled.
+    window.location.assign("/");
   }
 
   return (
     <nav
-      className={`fixed top-0 left-0 right-0 z-40 transition-colors duration-300 ${
-        showSolid ? "bg-background border-b border-border" : "bg-transparent"
+      className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${
+        showSolid ? "nav-solid" : "bg-transparent"
       }`}
     >
-      <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 text-foreground">
-          <Logo size={26} className="text-accent" />
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
+        <Link href="/" className="nav-logo">
+          <span className="nav-logo-mark text-accent">
+            <Logo size={26} />
+          </span>
           <span className="text-[15px] font-medium tracking-tight">openline</span>
         </Link>
 
         <div className="hidden md:flex items-center gap-1">
-          <Link href="/" className="btn-ghost text-[14px]">介绍</Link>
+          <Link href="/" className="nav-link" data-active={isActive("/")}>
+            介绍
+          </Link>
           {!user && (
             <>
-              <Link href="/book" className="btn-ghost text-[14px]">预约</Link>
-              <Link href="/login" className="btn-ghost text-[14px]">登录</Link>
+              <Link href="/book" className="nav-link" data-active={isActive("/book")}>
+                预约
+              </Link>
+              <Link href="/login" className="nav-link" data-active={isActive("/login")}>
+                登录
+              </Link>
             </>
           )}
           {user && !user.is_listener && !user.listener_application_at && (
             <>
-              <Link href="/book" className="btn-ghost text-[14px]">预约</Link>
-              <Link href="/me" className="btn-ghost text-[14px]">我的</Link>
+              <Link href="/book" className="nav-link" data-active={isActive("/book")}>
+                预约
+              </Link>
+              <Link href="/me" className="nav-link" data-active={isActive("/me")}>
+                我的
+              </Link>
             </>
           )}
           {user && !user.is_listener && user.listener_application_at && (
-            <Link href="/listener/pending" className="btn-ghost text-[14px]">审核中</Link>
+            <Link
+              href="/listener/pending"
+              className="nav-link"
+              data-active={isActive("/listener/pending")}
+            >
+              审核中
+            </Link>
           )}
           {user && user.is_listener && (
-            <Link href="/listener" className="btn-ghost text-[14px]">后台</Link>
+            <Link
+              href="/listener"
+              className="nav-link"
+              data-active={isActive("/listener")}
+            >
+              后台
+            </Link>
           )}
           {user && (
-            <div className="relative">
+            <div className="relative ml-1">
               <button
                 onClick={() => setDropdownOpen((v) => !v)}
-                className="btn-ghost text-[14px] flex items-center gap-1"
+                className="nav-link"
+                aria-haspopup="menu"
+                aria-expanded={dropdownOpen}
               >
                 {user.username}
-                <ChevronDown size={14} />
+                <ChevronDown
+                  size={14}
+                  className={`transition-transform duration-200 ${
+                    dropdownOpen ? "rotate-180" : ""
+                  }`}
+                />
               </button>
               {dropdownOpen && (
                 <>
@@ -131,7 +187,7 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
                     className="fixed inset-0 z-10"
                     onClick={() => setDropdownOpen(false)}
                   />
-                  <div className="absolute right-0 top-full mt-1 w-44 bg-surface border border-border rounded-lg py-1 shadow-sm z-20">
+                  <div className="nav-dropdown absolute right-0 top-full mt-2 w-44 bg-surface border border-border rounded-lg py-1 shadow-md z-20 overflow-hidden">
                     <Link
                       href={
                         user.is_listener
@@ -141,7 +197,7 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
                           : "/me"
                       }
                       onClick={() => setDropdownOpen(false)}
-                      className="block px-3 py-2 text-[14px] hover:bg-accent-soft"
+                      className="nav-dropdown-item"
                     >
                       {user.is_listener
                         ? "倾听者后台"
@@ -154,7 +210,7 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
                         setDropdownOpen(false);
                         logout();
                       }}
-                      className="block w-full text-left px-3 py-2 text-[14px] hover:bg-accent-soft"
+                      className="nav-dropdown-item"
                     >
                       退出
                     </button>
@@ -163,52 +219,134 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
               )}
             </div>
           )}
+          <button
+            onClick={toggle}
+            aria-label="切换主题"
+            className="nav-icon-btn ml-1"
+          >
+            {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
+          </button>
         </div>
 
-        <button
-          className="md:hidden p-2"
-          onClick={() => setMenuOpen((v) => !v)}
-          aria-label="菜单"
-        >
-          {menuOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
+        <div className="md:hidden flex items-center gap-1">
+          <button
+            onClick={toggle}
+            aria-label="切换主题"
+            className="nav-icon-btn"
+          >
+            {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
+          </button>
+          <button
+            className="nav-icon-btn"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="菜单"
+            aria-expanded={menuOpen}
+          >
+            {menuOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+        </div>
       </div>
 
       {menuOpen && (
-        <div className="md:hidden border-t border-border bg-background">
-          <div className="px-6 py-4 flex flex-col gap-2">
-            <Link href="/" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">介绍</Link>
-            {!user && (
-              <>
-                <Link href="/book" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">预约</Link>
-                <Link href="/login" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">登录</Link>
-              </>
-            )}
-            {user && !user.is_listener && !user.listener_application_at && (
-              <>
-                <Link href="/book" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">预约</Link>
-                <Link href="/me" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">我的预约</Link>
-              </>
-            )}
-            {user && !user.is_listener && user.listener_application_at && (
-              <Link href="/listener/pending" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">申请审核中</Link>
-            )}
-            {user && user.is_listener && (
-              <Link href="/listener" onClick={() => setMenuOpen(false)} className="py-2 text-[15px]">倾听者后台</Link>
-            )}
-            {user && (
-              <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  logout();
-                }}
-                className="py-2 text-[15px] text-left text-muted"
+        <>
+          <div
+            className="md:hidden fixed inset-0 top-14 z-10 bg-background/60 backdrop-blur-sm"
+            onClick={() => setMenuOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="md:hidden relative z-20 border-t border-border bg-background nav-dropdown shadow-sm">
+            <div className="px-4 py-3 flex flex-col gap-1">
+              {user && (
+                <div className="px-3 pb-3 mb-1 border-b border-border">
+                  <div className="text-caption text-muted">已登录</div>
+                  <div className="text-[15px] font-medium tracking-tight truncate">
+                    {user.username}
+                  </div>
+                </div>
+              )}
+              <Link
+                href="/"
+                onClick={() => setMenuOpen(false)}
+                className="nav-dropdown-item rounded-md"
+                data-active={isActive("/")}
               >
-                退出
-              </button>
-            )}
+                介绍
+              </Link>
+              {!user && (
+                <>
+                  <Link
+                    href="/book"
+                    onClick={() => setMenuOpen(false)}
+                    className="nav-dropdown-item rounded-md"
+                  >
+                    预约
+                  </Link>
+                  <Link
+                    href="/login"
+                    onClick={() => setMenuOpen(false)}
+                    className="nav-dropdown-item rounded-md"
+                  >
+                    登录
+                  </Link>
+                  <Link
+                    href="/listener/signup"
+                    onClick={() => setMenuOpen(false)}
+                    className="nav-dropdown-item rounded-md"
+                  >
+                    申请成为倾听者
+                  </Link>
+                </>
+              )}
+              {user && !user.is_listener && !user.listener_application_at && (
+                <>
+                  <Link
+                    href="/book"
+                    onClick={() => setMenuOpen(false)}
+                    className="nav-dropdown-item rounded-md"
+                  >
+                    预约
+                  </Link>
+                  <Link
+                    href="/me"
+                    onClick={() => setMenuOpen(false)}
+                    className="nav-dropdown-item rounded-md"
+                  >
+                    我的预约
+                  </Link>
+                </>
+              )}
+              {user && !user.is_listener && user.listener_application_at && (
+                <Link
+                  href="/listener/pending"
+                  onClick={() => setMenuOpen(false)}
+                  className="nav-dropdown-item rounded-md"
+                >
+                  申请审核中
+                </Link>
+              )}
+              {user && user.is_listener && (
+                <Link
+                  href="/listener"
+                  onClick={() => setMenuOpen(false)}
+                  className="nav-dropdown-item rounded-md"
+                >
+                  倾听者后台
+                </Link>
+              )}
+              {user && (
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    logout();
+                  }}
+                  className="nav-dropdown-item rounded-md text-muted"
+                >
+                  退出
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </nav>
   );

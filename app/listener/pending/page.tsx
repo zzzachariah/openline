@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import { Copy, Check } from "lucide-react";
 import Logo from "@/components/Logo";
 import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
-import { createBrowserClient, withTimeout } from "@/lib/supabase/client";
+import { createBrowserClient } from "@/lib/supabase/client";
 
 export default function ListenerPendingPage() {
   const router = useRouter();
@@ -17,41 +16,36 @@ export default function ListenerPendingPage() {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      try {
-        const supabase = createBrowserClient();
-        const { data: auth } = await withTimeout(supabase.auth.getUser(), 12000);
-        if (cancelled) return;
-        if (!auth.user) {
-          router.push("/login?redirect=/listener/pending");
-          return;
-        }
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("username, is_listener, listener_application_at")
-          .eq("id", auth.user.id)
-          .single();
-        if (cancelled) return;
-        if (!profile) {
-          router.push("/login?redirect=/listener/pending");
-          return;
-        }
-
-        // Already approved — go to the listener dashboard.
-        if (profile.is_listener) {
-          router.push("/listener");
-          return;
-        }
-        // Never applied — they're a regular user.
-        if (!profile.listener_application_at) {
-          router.push("/me");
-          return;
-        }
-        setUsername(profile.username);
-      } catch {
-        if (!cancelled) router.push("/login?redirect=/listener/pending");
-      } finally {
-        if (!cancelled) setLoading(false);
+      const supabase = createBrowserClient();
+      const { data: auth } = await supabase.auth.getUser();
+      if (cancelled) return;
+      if (!auth.user) {
+        router.replace("/login?redirect=/listener/pending");
+        return;
       }
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("username, is_listener, listener_application_at")
+        .eq("id", auth.user.id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (!profile) {
+        router.replace("/login?redirect=/listener/pending");
+        return;
+      }
+
+      // Already approved — go to the listener dashboard.
+      if (profile.is_listener) {
+        router.replace("/listener");
+        return;
+      }
+      // Never applied — they're a regular user.
+      if (!profile.listener_application_at) {
+        router.replace("/me");
+        return;
+      }
+      setUsername(profile.username);
+      setLoading(false);
     }
     load();
     return () => {
@@ -73,16 +67,15 @@ export default function ListenerPendingPage() {
   async function logout() {
     const supabase = createBrowserClient();
     await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+    window.location.assign("/");
   }
 
   return (
     <>
       <Nav />
-      <main className="pt-24 pb-16 min-h-screen">
-        <div className="max-w-[440px] mx-auto px-6">
-          <div className="flex justify-center mb-8">
+      <main className="pt-20 sm:pt-24 pb-16">
+        <div className="max-w-[440px] mx-auto px-5 sm:px-6">
+          <div className="flex justify-center mb-6 sm:mb-8">
             <Logo size={40} className="text-accent" />
           </div>
           {loading ? (
@@ -129,7 +122,6 @@ export default function ListenerPendingPage() {
           )}
         </div>
       </main>
-      <Footer />
     </>
   );
 }
