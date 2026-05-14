@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Shuffle, Sparkles, X } from "lucide-react";
-import Nav from "@/components/Nav";
+import Nav, { type NavUserShape } from "@/components/Nav";
 import ListenerReviewsModal from "@/components/ListenerReviewsModal";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { formatDayHeader, formatDayKey, formatTimeRange } from "@/lib/format";
@@ -41,9 +41,10 @@ function leadingBlanks(firstDayOfWeek: number) {
 type Props = {
   userId: string;
   initialSlots: Slot[];
+  navUser: NavUserShape | null;
 };
 
-export default function BookPageClient({ userId, initialSlots }: Props) {
+export default function BookPageClient({ userId, initialSlots, navUser }: Props) {
   const router = useRouter();
   const [slots, setSlots] = useState<Slot[]>(initialSlots);
   const [selectedDate, setSelectedDate] = useState<string | null>(() => {
@@ -244,7 +245,7 @@ export default function BookPageClient({ userId, initialSlots }: Props) {
 
   return (
     <>
-      <Nav />
+      <Nav initialUser={navUser} />
       <main className="pt-20 sm:pt-24 pb-16 min-h-screen">
         <div className="max-w-[960px] mx-auto px-5 sm:px-6">
           <h1 className="text-h2-mobile sm:text-h2 font-medium tracking-tight mb-2">选择一个时段</h1>

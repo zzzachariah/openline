@@ -20,14 +20,21 @@ export default async function BookPage() {
   }
 
   const nowIso = new Date().toISOString();
-  const { data: rows } = await supabase
-    .from("time_slots")
-    .select(
-      "id, start_time, end_time, listener_id, listener:profiles!time_slots_listener_id_fkey(id, username)"
-    )
-    .eq("is_booked", false)
-    .gt("start_time", nowIso)
-    .order("start_time", { ascending: true });
+  const [{ data: profile }, { data: rows }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("username, is_listener, listener_application_at")
+      .eq("id", auth.user.id)
+      .maybeSingle(),
+    supabase
+      .from("time_slots")
+      .select(
+        "id, start_time, end_time, listener_id, listener:profiles!time_slots_listener_id_fkey(id, username)"
+      )
+      .eq("is_booked", false)
+      .gt("start_time", nowIso)
+      .order("start_time", { ascending: true }),
+  ]);
 
   const initialSlots: Slot[] = ((rows ?? []) as RawSlot[]).map((r) => {
     const listener = Array.isArray(r.listener) ? r.listener[0] : r.listener;
@@ -39,5 +46,19 @@ export default async function BookPage() {
     };
   });
 
-  return <BookPageClient userId={auth.user.id} initialSlots={initialSlots} />;
+  return (
+    <BookPageClient
+      userId={auth.user.id}
+      initialSlots={initialSlots}
+      navUser={
+        profile
+          ? {
+              username: profile.username,
+              is_listener: !!profile.is_listener,
+              listener_application_at: profile.listener_application_at ?? null,
+            }
+          : null
+      }
+    />
+  );
 }

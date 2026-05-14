@@ -97,6 +97,11 @@ export default async function ListenerPage() {
       initialSlots={slots}
       initialBookings={bookings}
       initialReviews={reviews}
+      navUser={{
+        username: profile.username,
+        is_listener: true,
+        listener_application_at: profile.listener_application_at ?? null,
+      }}
     />
   );
 }

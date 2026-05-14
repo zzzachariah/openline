@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Copy, Check, X } from "lucide-react";
-import Nav from "@/components/Nav";
+import Nav, { type NavUserShape } from "@/components/Nav";
 import BookingCard, { BookingCardData } from "@/components/BookingCard";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { useUserBookings } from "@/lib/hooks/useUserBookings";
@@ -28,6 +28,7 @@ type Props = {
   username: string;
   initialBookings: BookingWithListener[];
   initialReviews: MyReview[];
+  navUser: NavUserShape;
 };
 
 export default function MePageClient({
@@ -35,6 +36,7 @@ export default function MePageClient({
   username,
   initialBookings,
   initialReviews,
+  navUser,
 }: Props) {
   const router = useRouter();
   const initialAsCardData: BookingCardData[] = initialBookings.map((b) => ({
@@ -122,7 +124,7 @@ export default function MePageClient({
 
   return (
     <>
-      <Nav />
+      <Nav initialUser={navUser} />
       <main className="pt-20 sm:pt-24 pb-16">
         <div className="max-w-prose mx-auto px-5 sm:px-6">
           <div className="mb-10 sm:mb-12">

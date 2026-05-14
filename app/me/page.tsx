@@ -26,7 +26,7 @@ export default async function MePage() {
   const [{ data: profile }, { data: rawBookings }, { data: rawReviews }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("username, is_listener")
+      .select("username, is_listener, listener_application_at")
       .eq("id", userId)
       .single(),
     supabase
@@ -87,6 +87,11 @@ export default async function MePage() {
       username={profile.username}
       initialBookings={bookings}
       initialReviews={reviews}
+      navUser={{
+        username: profile.username,
+        is_listener: false,
+        listener_application_at: profile.listener_application_at ?? null,
+      }}
     />
   );
 }
