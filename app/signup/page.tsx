@@ -71,7 +71,11 @@ function SignupContent() {
         "注册完成但登录超时，请前往登录页"
       );
       if (signInError) {
-        setError(`注册成功但登录失败：${signInError.message}。请前往登录页`);
+        // Account was created successfully; sign-in failed for some reason
+        // (network blip, lock contention). Still surface the username so the
+        // user can save it and log in manually instead of being stuck on the
+        // form with no feedback about whether the account exists.
+        setCreated(username);
         return;
       }
       setCreated(username);

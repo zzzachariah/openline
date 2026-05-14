@@ -11,6 +11,7 @@ import { usernameToEmail } from "@/lib/username";
 import { TimeoutError, withTimeout } from "@/lib/with-timeout";
 
 const LOGIN_TIMEOUT_MS = 10_000;
+const PROFILE_LOOKUP_TIMEOUT_MS = 4_000;
 
 function LoginContent() {
   const params = useSearchParams();
@@ -33,11 +34,14 @@ function LoginContent() {
     setLoading(true);
     try {
       const supabase = createBrowserClient();
-      const { data: signInData, error: signInError } =
-        await supabase.auth.signInWithPassword({
+      const { data: signInData, error: signInError } = await withTimeout(
+        supabase.auth.signInWithPassword({
           email: usernameToEmail(u),
           password,
-        });
+        }),
+        LOGIN_TIMEOUT_MS,
+        "登录超时（10 秒未响应），请检查网络后重试"
+      );
       if (signInError || !signInData.user) {
         setError("用户名或密码不正确");
         setLoading(false);
@@ -46,20 +50,30 @@ function LoginContent() {
 
       // Determine where to send the user. Use the user we just signed in with
       // directly (avoid an extra getUser() roundtrip that can hang) and use
-      // maybeSingle() so a missing profile row never blocks navigation.
+      // maybeSingle() so a missing profile row never blocks navigation. The
+      // lookup itself is wrapped in a short timeout: if it stalls we fall back
+      // to /me so the user is never stuck on "登录中...".
       let target = "/me";
       if (redirect) {
         target = redirect;
       } else {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("is_listener, listener_application_at")
-          .eq("id", signInData.user.id)
-          .maybeSingle();
-        if (profile?.is_listener) {
-          target = "/listener";
-        } else if (profile?.listener_application_at) {
-          target = "/listener/pending";
+        try {
+          const { data: profile } = await withTimeout(
+            supabase
+              .from("profiles")
+              .select("is_listener, listener_application_at")
+              .eq("id", signInData.user.id)
+              .maybeSingle(),
+            PROFILE_LOOKUP_TIMEOUT_MS
+          );
+          if (profile?.is_listener) {
+            target = "/listener";
+          } else if (profile?.listener_application_at) {
+            target = "/listener/pending";
+          }
+        } catch {
+          // Profile lookup failed or timed out — /me will route correctly on
+          // the server side, so just continue.
         }
       }
 
@@ -67,8 +81,14 @@ function LoginContent() {
       // with the auth cookies that signInWithPassword just set. router.push
       // can race with cookie propagation and leave the page in a stale state.
       window.location.assign(target);
-    } catch {
-      setError("登录失败，请稍后再试");
+    } catch (err) {
+      if (err instanceof TimeoutError) {
+        setError(err.message);
+      } else if (err instanceof Error && err.message) {
+        setError(`登录失败：${err.message}`);
+      } else {
+        setError("登录失败，请稍后再试");
+      }
       setLoading(false);
     }
   }
