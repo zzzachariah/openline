@@ -1,9 +1,33 @@
-import ChatRoom from "@/components/ChatRoom";
+import ChatRoom, { type Message } from "@/components/ChatRoom";
+import { createServerClient } from "@/lib/supabase/server";
 
-export default function ListenerChatPage({
+export const dynamic = "force-dynamic";
+
+export default async function ListenerChatPage({
   params,
 }: {
   params: { bookingId: string };
 }) {
-  return <ChatRoom bookingId={params.bookingId} role="listener" />;
+  const initialMessages = await loadInitialMessages(params.bookingId);
+  return (
+    <ChatRoom
+      bookingId={params.bookingId}
+      role="listener"
+      initialMessages={initialMessages}
+    />
+  );
+}
+
+async function loadInitialMessages(bookingId: string): Promise<Message[]> {
+  const supabase = createServerClient();
+  const { data, error } = await supabase
+    .from("messages")
+    .select("id, booking_id, sender_id, content, message_type, created_at")
+    .eq("booking_id", bookingId)
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("server-side initial messages fetch failed", error);
+    return [];
+  }
+  return (data ?? []) as Message[];
 }

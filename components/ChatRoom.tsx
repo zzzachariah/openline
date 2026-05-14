@@ -21,7 +21,7 @@ import { createBrowserClient } from "@/lib/supabase/client";
 import { formatTime } from "@/lib/format";
 import ChatRoomSkeleton from "./ChatRoomSkeleton";
 
-type Message = {
+export type Message = {
   id: string;
   booking_id: string;
   sender_id: string;
@@ -35,6 +35,7 @@ type Message = {
 type ChatRoomProps = {
   bookingId: string;
   role: "user" | "listener";
+  initialMessages?: Message[];
 };
 
 type BookingInfo = {
@@ -50,13 +51,13 @@ type BookingInfo = {
 
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
-export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
+export default function ChatRoom({ bookingId, role, initialMessages }: ChatRoomProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
   const [booking, setBooking] = useState<BookingInfo | null>(null);
   const [me, setMe] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(initialMessages ?? []);
   const [draft, setDraft] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [meetingPanelOpen, setMeetingPanelOpen] = useState(false);
@@ -81,18 +82,31 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
     let channel: RealtimeChannel | null = null;
 
     async function fetchMessages() {
-      const { data: msgs } = await supabase
+      const { data: msgs, error } = await supabase
         .from("messages")
         .select("id, booking_id, sender_id, content, message_type, created_at")
         .eq("booking_id", bookingId)
         .order("created_at", { ascending: true });
-      if (cancelled || !msgs) return;
+      if (cancelled) return;
+      if (error) {
+        console.error("fetch messages failed", error);
+        return;
+      }
+      if (!msgs) return;
       setMessages((prev) => {
-        // Preserve any still-pending or failed local messages while merging
+        const serverRows = msgs as Message[];
         const pendingLocal = prev.filter((m) => m.pending || m.failed);
-        const serverIds = new Set((msgs as Message[]).map((m) => m.id));
+        const serverIds = new Set(serverRows.map((m) => m.id));
         const keep = pendingLocal.filter((m) => !serverIds.has(m.id));
-        return [...(msgs as Message[]), ...keep];
+        // If the server returned an empty list but we already have committed
+        // (non-pending) history on screen, treat the empty result as a
+        // transient blip — possibly a race with realtime auth or the
+        // bookings RLS subquery — and keep showing what we had.
+        if (serverRows.length === 0) {
+          const committed = prev.filter((m) => !m.pending && !m.failed);
+          if (committed.length > 0) return prev;
+        }
+        return [...serverRows, ...keep];
       });
     }
 
