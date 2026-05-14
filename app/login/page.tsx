@@ -10,8 +10,11 @@ import { createBrowserClient } from "@/lib/supabase/client";
 import { usernameToEmail } from "@/lib/username";
 import { TimeoutError, withTimeout } from "@/lib/with-timeout";
 
-const LOGIN_TIMEOUT_MS = 10_000;
-const PROFILE_LOOKUP_TIMEOUT_MS = 4_000;
+// Generous enough that a slow mobile connection won't trip it, but short enough
+// to recover from a wedged GoTrueClient (rare) without the user staring at
+// "登录中..." indefinitely.
+const LOGIN_TIMEOUT_MS = 25_000;
+const PROFILE_LOOKUP_TIMEOUT_MS = 6_000;
 
 function LoginContent() {
   const params = useSearchParams();
@@ -40,7 +43,7 @@ function LoginContent() {
           password,
         }),
         LOGIN_TIMEOUT_MS,
-        "登录超时（10 秒未响应），请检查网络后重试"
+        "登录超时，请检查网络后重试"
       );
       if (signInError || !signInData.user) {
         setError("用户名或密码不正确");
