@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
-import Nav from "@/components/Nav";
+import Nav, { type NavUserShape } from "@/components/Nav";
 import BookingCard, { BookingCardData } from "@/components/BookingCard";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { formatDate, formatDayHeader, formatDayKey, formatTime, formatTimeRange } from "@/lib/format";
@@ -31,6 +31,7 @@ type Props = {
   initialSlots: Slot[];
   initialBookings: BookingCardData[];
   initialReviews: ReceivedReview[];
+  navUser: NavUserShape;
 };
 
 export default function ListenerPageClient({
@@ -39,6 +40,7 @@ export default function ListenerPageClient({
   initialSlots,
   initialBookings,
   initialReviews,
+  navUser,
 }: Props) {
   const { data: slots = [], mutate: mutateSlots } = useListenerSlots(userId, initialSlots);
   const { data: bookings = [], mutate: mutateBookings } = useListenerBookings(
@@ -83,7 +85,7 @@ export default function ListenerPageClient({
 
   return (
     <>
-      <Nav />
+      <Nav initialUser={navUser} />
       <main className="pt-20 sm:pt-24 pb-16">
         <div className="max-w-prose mx-auto px-5 sm:px-6">
           <div className="mb-8 sm:mb-10">

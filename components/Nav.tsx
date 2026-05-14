@@ -8,19 +8,28 @@ import { Menu, X, ChevronDown, Sun, Moon } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { useTheme } from "./ThemeProvider";
 
-type NavUser = {
+export type NavUserShape = {
   username: string;
   is_listener: boolean;
   listener_application_at: string | null;
-} | null;
+};
+
+type NavUser = NavUserShape | null;
 
 type NavProps = {
   transparentOnTop?: boolean;
+  // When provided (even as null), the server has already determined the auth
+  // state for this request and Nav skips the client-side getUser/profile
+  // roundtrip on mount. Auth-protected server pages should always pass this so
+  // the navbar matches the rest of the server-rendered shell on first paint;
+  // pages without a server-side auth check (homepage, /login, /signup) can
+  // omit it and Nav falls back to the client-side discovery flow.
+  initialUser?: NavUser;
 };
 
-export default function Nav({ transparentOnTop = false }: NavProps) {
+export default function Nav({ transparentOnTop = false, initialUser }: NavProps) {
   const [scrolled, setScrolled] = useState(false);
-  const [user, setUser] = useState<NavUser>(null);
+  const [user, setUser] = useState<NavUser>(initialUser ?? null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const pathname = usePathname();
@@ -60,12 +69,23 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
       if (active && profile) setUser(profile as NavUser);
     }
 
-    loadUser();
+    // When the server didn't pre-fill the user, fetch it now. With a
+    // server-known initialUser we skip this entirely — racing the same
+    // getUser+profile chain alongside the SWR queries on the listener
+    // dashboard sometimes left the navbar stuck on "登录" because the profile
+    // .single() result lost the race and the early-out left state at null.
+    if (initialUser === undefined) {
+      loadUser();
+    }
     // The callback fires while GoTrueClient still holds its internal lock
     // (e.g. during signInWithPassword / signOut). Awaiting getUser() inside it
     // would re-enter the same non-reentrant lock and deadlock sign-in. Defer
     // to the next microtask so the lock has been released before we re-enter.
-    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      // INITIAL_SESSION fires synchronously when we subscribe. If we already
+      // know who the user is (from props or the loadUser above) re-fetching
+      // here is wasted work that fights for the same lock.
+      if (event === "INITIAL_SESSION") return;
       setTimeout(() => {
         if (active) loadUser();
       }, 0);
@@ -74,6 +94,7 @@ export default function Nav({ transparentOnTop = false }: NavProps) {
       active = false;
       sub.subscription.unsubscribe();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const showSolid = !transparentOnTop || scrolled;
