@@ -265,106 +265,110 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
         )}
       </header>
 
-      {/* Content */}
-      {sessionEnded ? (
-        <EndedScreen
-          role={role}
-          resourcesOpen={resourcesOpen}
-          setResourcesOpen={setResourcesOpen}
-        />
-      ) : (
-        <>
-          <div ref={containerRef} className="flex-1 overflow-y-auto">
-            <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-              {messages.length === 0 && (
-                <div className="text-center text-muted text-[14px] py-12">
-                  这是你们的聊天室。
-                  <br />
-                  说点什么开始吧。
-                </div>
-              )}
-              {messageGroups.map((group, i) => (
-                <div key={i} className="space-y-2">
-                  {group.showTimestamp && (
-                    <div className="text-center text-caption text-muted py-1">
-                      {formatTime(new Date(group.messages[0].created_at))}
-                    </div>
-                  )}
-                  {group.messages.map((m) => (
-                    <MessageBubble key={m.id} message={m} mine={m.sender_id === me} />
-                  ))}
-                </div>
-              ))}
-              <div ref={messagesEndRef} />
+      {/* Messages */}
+      <div ref={containerRef} className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+          {messages.length === 0 && !sessionEnded && (
+            <div className="text-center text-muted text-[14px] py-12">
+              这是你们的聊天室。
+              <br />
+              说点什么开始吧。
             </div>
-          </div>
-
-          {/* Input */}
-          <div className="border-t border-border bg-background">
-            <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3">
-              {role === "listener" && meetingPanelOpen && (
-                <div className="mb-3 flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={meetingCode}
-                    onChange={(e) => setMeetingCode(e.target.value)}
-                    placeholder="粘贴腾讯会议号"
-                    className="input flex-1"
-                  />
-                  <button
-                    onClick={handleSendMeetingCode}
-                    disabled={!meetingCode.trim()}
-                    className="btn-primary"
-                  >
-                    发送
-                  </button>
-                  <button
-                    onClick={() => setMeetingPanelOpen(false)}
-                    className="btn-ghost"
-                  >
-                    取消
-                  </button>
+          )}
+          {messages.length === 0 && sessionEnded && (
+            <div className="text-center text-muted text-[14px] py-12">
+              这次倾诉没有留下文字记录。
+            </div>
+          )}
+          {messageGroups.map((group, i) => (
+            <div key={i} className="space-y-2">
+              {group.showTimestamp && (
+                <div className="text-center text-caption text-muted py-1">
+                  {formatTime(new Date(group.messages[0].created_at))}
                 </div>
               )}
-              <div className="flex items-end gap-2">
-                <div className="flex-1 relative">
-                  <textarea
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
-                    onKeyDown={onKeyDown}
-                    placeholder="说点什么..."
-                    rows={1}
-                    className="input resize-none min-h-[44px] max-h-32 py-2.5"
-                    style={{ paddingRight: draft.length > 800 ? 60 : undefined }}
-                  />
-                  {draft.length > 800 && (
-                    <span className="absolute right-3 bottom-2 text-[12px] text-muted">
-                      {draft.length} / 1000
-                    </span>
-                  )}
-                </div>
-                {role === "listener" && (
-                  <button
-                    type="button"
-                    onClick={() => setMeetingPanelOpen((v) => !v)}
-                    className="btn-secondary py-2.5 px-3 text-[13px]"
-                    title="发送腾讯会议号"
-                  >
-                    发送会议号
-                  </button>
-                )}
+              {group.messages.map((m) => (
+                <MessageBubble key={m.id} message={m} mine={m.sender_id === me} />
+              ))}
+            </div>
+          ))}
+          {sessionEnded && (
+            <EndedNotice
+              role={role}
+              resourcesOpen={resourcesOpen}
+              setResourcesOpen={setResourcesOpen}
+            />
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
+
+      {/* Input — hidden once the session has ended */}
+      {!sessionEnded && (
+        <div className="border-t border-border bg-background">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3">
+            {role === "listener" && meetingPanelOpen && (
+              <div className="mb-3 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={meetingCode}
+                  onChange={(e) => setMeetingCode(e.target.value)}
+                  placeholder="粘贴腾讯会议号"
+                  className="input flex-1"
+                />
                 <button
-                  onClick={handleSend}
-                  disabled={!draft.trim() || sessionEnded}
-                  className="btn-primary py-2.5 px-4"
-                  aria-label="发送"
+                  onClick={handleSendMeetingCode}
+                  disabled={!meetingCode.trim()}
+                  className="btn-primary"
                 >
-                  <Send size={16} />
+                  发送
+                </button>
+                <button
+                  onClick={() => setMeetingPanelOpen(false)}
+                  className="btn-ghost"
+                >
+                  取消
                 </button>
               </div>
+            )}
+            <div className="flex items-end gap-2">
+              <div className="flex-1 relative">
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
+                  onKeyDown={onKeyDown}
+                  placeholder="说点什么..."
+                  rows={1}
+                  className="input resize-none min-h-[44px] max-h-32 py-2.5"
+                  style={{ paddingRight: draft.length > 800 ? 60 : undefined }}
+                />
+                {draft.length > 800 && (
+                  <span className="absolute right-3 bottom-2 text-[12px] text-muted">
+                    {draft.length} / 1000
+                  </span>
+                )}
+              </div>
+              {role === "listener" && (
+                <button
+                  type="button"
+                  onClick={() => setMeetingPanelOpen((v) => !v)}
+                  className="btn-secondary py-2.5 px-3 text-[13px]"
+                  title="发送腾讯会议号"
+                >
+                  发送会议号
+                </button>
+              )}
+              <button
+                onClick={handleSend}
+                disabled={!draft.trim() || sessionEnded}
+                className="btn-primary py-2.5 px-4"
+                aria-label="发送"
+              >
+                <Send size={16} />
+              </button>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
@@ -449,7 +453,7 @@ function groupMessages(messages: Message[]): Group[] {
   return groups;
 }
 
-function EndedScreen({
+function EndedNotice({
   role,
   resourcesOpen,
   setResourcesOpen,
@@ -459,48 +463,46 @@ function EndedScreen({
   setResourcesOpen: (v: boolean) => void;
 }) {
   return (
-    <div className="flex-1 flex items-center justify-center px-6">
-      <div className="max-w-prose w-full py-12">
-        <p className="text-h2 font-medium tracking-tight text-center mb-10">
-          这次倾诉结束了。
-        </p>
-        <p className="text-[15px] text-foreground/85 leading-relaxed text-center mb-6">
-          如果今天聊的内容让你觉得有些事情可能需要更专业的帮助，
-        </p>
-        <button
-          onClick={() => setResourcesOpen(!resourcesOpen)}
-          className="mx-auto flex items-center gap-1 text-[14px] text-accent mb-4"
-        >
-          {resourcesOpen ? "收起" : "展开"}{" "}
-          <ChevronDown
-            size={14}
-            className={`transition-transform ${resourcesOpen ? "rotate-180" : ""}`}
-          />
-          {!resourcesOpen && <span className="ml-1 text-foreground">这里有一些资源</span>}
-        </button>
-        {resourcesOpen && (
-          <div className="card mb-10 text-[14px] leading-relaxed text-foreground/85 space-y-2">
-            <ResourceItem text="全国心理援助热线: 400-161-9995" />
-            <ResourceItem text="北京心理危机研究与干预中心: 010-82951332" />
-            <ResourceItem text="12355 青少年服务热线" />
-            <ResourceItem text="各地三甲医院的精神科 / 心理科" />
-          </div>
-        )}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-10">
-          {role === "user" && (
-            <Link href="/book" className="btn-primary">
-              预约下一次
-            </Link>
-          )}
-          {role === "listener" && (
-            <Link href="/listener" className="btn-primary">
-              返回后台
-            </Link>
-          )}
-          <Link href="/" className="btn-ghost">
-            回到首页
-          </Link>
+    <div className="border-t border-border pt-8 mt-8">
+      <p className="text-[17px] font-medium tracking-tight text-center mb-4">
+        这次倾诉结束了。
+      </p>
+      <p className="text-[14px] text-foreground/85 leading-relaxed text-center mb-3">
+        如果今天聊的内容让你觉得有些事情可能需要更专业的帮助，
+      </p>
+      <button
+        onClick={() => setResourcesOpen(!resourcesOpen)}
+        className="mx-auto flex items-center gap-1 text-[14px] text-accent mb-4"
+      >
+        {resourcesOpen ? "收起" : "展开"}{" "}
+        <ChevronDown
+          size={14}
+          className={`transition-transform ${resourcesOpen ? "rotate-180" : ""}`}
+        />
+        {!resourcesOpen && <span className="ml-1 text-foreground">这里有一些资源</span>}
+      </button>
+      {resourcesOpen && (
+        <div className="card mb-6 text-[14px] leading-relaxed text-foreground/85 space-y-2">
+          <ResourceItem text="全国心理援助热线: 400-161-9995" />
+          <ResourceItem text="北京心理危机研究与干预中心: 010-82951332" />
+          <ResourceItem text="12355 青少年服务热线" />
+          <ResourceItem text="各地三甲医院的精神科 / 心理科" />
         </div>
+      )}
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-6">
+        {role === "user" && (
+          <Link href="/book" className="btn-primary">
+            预约下一次
+          </Link>
+        )}
+        {role === "listener" && (
+          <Link href="/listener" className="btn-primary">
+            返回后台
+          </Link>
+        )}
+        <Link href="/" className="btn-ghost">
+          回到首页
+        </Link>
       </div>
     </div>
   );
