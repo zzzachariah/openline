@@ -451,115 +451,87 @@ export default function ChatRoom({ bookingId, role }: ChatRoomProps) {
           pastRetention={pastRetention}
         />
       ) : (
-        <>
-          <div ref={containerRef} className="flex-1 overflow-y-auto">
-            <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-              {messages.length === 0 && (
-                <div className="text-center text-muted text-[14px] py-12">
-                  这是你们的聊天室。
-                  <br />
-                  说点什么开始吧。
-                </div>
-              )}
-              {messageGroups.map((group, i) => (
-                <div key={i} className="space-y-2">
-                  {group.showTimestamp && (
-                    <div className="text-center text-caption text-muted py-1">
-                      {formatTime(new Date(group.messages[0].created_at))}
-                    </div>
-                  )}
-                  {group.messages.map((m) => (
-                    <MessageBubble key={m.id} message={m} mine={m.sender_id === me} />
-                  ))}
-                </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
-          </div>
-
-          {/* Input */}
-          <div className="border-t border-border bg-background safe-bottom">
-            <div className="max-w-3xl mx-auto px-3 sm:px-6 py-3">
-              {sendError && (
-                <div className="mb-2 text-[13px] text-danger inline-flex items-center gap-1.5">
-                  <AlertCircle size={14} />
-                  {sendError}
-                </div>
-              )}
-              {role === "listener" && meetingPanelOpen && (
-                <div className="mb-3 flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={meetingCode}
-                    onChange={(e) => setMeetingCode(e.target.value)}
-                    placeholder="粘贴腾讯会议号"
-                    autoFocus
-                    className="block flex-1 min-w-0 h-11 rounded-lg border border-border bg-surface text-foreground text-[16px] sm:text-[15px] px-3.5 outline-none focus:border-accent placeholder:text-muted transition-colors"
-                  />
-                  <button
-                    onClick={handleSendMeetingCode}
-                    disabled={!meetingCode.trim()}
-                    className="inline-flex items-center justify-center h-11 px-4 sm:px-5 rounded-full bg-accent text-white border border-accent text-[15px] font-medium transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                  >
-                    发送
-                  </button>
-                  <button
-                    onClick={() => setMeetingPanelOpen(false)}
-                    aria-label="取消"
-                    className="inline-flex items-center justify-center w-11 h-11 rounded-full text-muted hover:text-foreground hover:bg-accent-soft transition-colors shrink-0"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-              )}
-              <div className="flex items-end gap-2">
-                {role === "listener" && (
-                  <button
-                    type="button"
-                    onClick={() => setMeetingPanelOpen((v) => !v)}
-                    aria-label={meetingPanelOpen ? "关闭会议号输入" : "发送腾讯会议号"}
-                    aria-pressed={meetingPanelOpen}
-                    title="发送腾讯会议号"
-                    className={`shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-full border transition-colors ${
-                      meetingPanelOpen
-                        ? "border-accent bg-accent-soft text-accent"
-                        : "border-border text-muted hover:border-accent hover:text-accent"
-                    }`}
-                  >
-                    <Plus
-                      size={18}
-                      className={`transition-transform ${meetingPanelOpen ? "rotate-45" : ""}`}
-                    />
-                  </button>
-                )}
-                <div className="flex-1 relative min-w-0">
-                  <textarea
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
-                    onKeyDown={onKeyDown}
-                    placeholder="说点什么..."
-                    rows={1}
-                    className="block w-full resize-none rounded-lg border border-border bg-surface text-foreground text-[16px] sm:text-[15px] leading-5 py-[11px] px-3.5 min-h-[44px] max-h-32 outline-none focus:border-accent placeholder:text-muted transition-colors"
-                    style={{ paddingRight: draft.length > 800 ? 60 : undefined }}
-                  />
-                  {draft.length > 800 && (
-                    <span className="absolute right-3 bottom-2 text-[12px] text-muted">
-                      {draft.length} / 1000
-                    </span>
-                  )}
-                </div>
+        <div className="border-t border-border bg-background safe-bottom">
+          <div className="max-w-3xl mx-auto px-3 sm:px-6 py-3">
+            {sendError && (
+              <div className="mb-2 text-[13px] text-danger inline-flex items-center gap-1.5">
+                <AlertCircle size={14} />
+                {sendError}
+              </div>
+            )}
+            {role === "listener" && meetingPanelOpen && (
+              <div className="mb-3 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={meetingCode}
+                  onChange={(e) => setMeetingCode(e.target.value)}
+                  placeholder="粘贴腾讯会议号"
+                  autoFocus
+                  className="block flex-1 min-w-0 h-11 rounded-lg border border-border bg-surface text-foreground text-[16px] sm:text-[15px] px-3.5 outline-none focus:border-accent placeholder:text-muted transition-colors"
+                />
                 <button
-                  onClick={handleSend}
-                  disabled={!draft.trim() || sessionEnded}
-                  aria-label="发送"
-                  className="inline-flex items-center justify-center h-11 w-11 rounded-full bg-accent text-white border border-accent transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                  onClick={handleSendMeetingCode}
+                  disabled={!meetingCode.trim()}
+                  className="inline-flex items-center justify-center h-11 px-4 sm:px-5 rounded-full bg-accent text-white border border-accent text-[15px] font-medium transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                 >
-                  <Send size={16} />
+                  发送
+                </button>
+                <button
+                  onClick={() => setMeetingPanelOpen(false)}
+                  aria-label="取消"
+                  className="inline-flex items-center justify-center w-11 h-11 rounded-full text-muted hover:text-foreground hover:bg-accent-soft transition-colors shrink-0"
+                >
+                  <X size={18} />
                 </button>
               </div>
+            )}
+            <div className="flex items-end gap-2">
+              {role === "listener" && (
+                <button
+                  type="button"
+                  onClick={() => setMeetingPanelOpen((v) => !v)}
+                  aria-label={meetingPanelOpen ? "关闭会议号输入" : "发送腾讯会议号"}
+                  aria-pressed={meetingPanelOpen}
+                  title="发送腾讯会议号"
+                  className={`shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-full border transition-colors ${
+                    meetingPanelOpen
+                      ? "border-accent bg-accent-soft text-accent"
+                      : "border-border text-muted hover:border-accent hover:text-accent"
+                  }`}
+                >
+                  <Plus
+                    size={18}
+                    className={`transition-transform ${meetingPanelOpen ? "rotate-45" : ""}`}
+                  />
+                </button>
+              )}
+              <div className="flex-1 relative min-w-0">
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
+                  onKeyDown={onKeyDown}
+                  placeholder="说点什么..."
+                  rows={1}
+                  className="block w-full resize-none rounded-lg border border-border bg-surface text-foreground text-[16px] sm:text-[15px] leading-5 py-[11px] px-3.5 min-h-[44px] max-h-32 outline-none focus:border-accent placeholder:text-muted transition-colors"
+                  style={{ paddingRight: draft.length > 800 ? 60 : undefined }}
+                />
+                {draft.length > 800 && (
+                  <span className="absolute right-3 bottom-2 text-[12px] text-muted">
+                    {draft.length} / 1000
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={handleSend}
+                disabled={!draft.trim() || sessionEnded}
+                aria-label="发送"
+                className="inline-flex items-center justify-center h-11 w-11 rounded-full bg-accent text-white border border-accent transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+              >
+                <Send size={16} />
+              </button>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
